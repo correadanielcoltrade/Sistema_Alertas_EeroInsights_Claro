@@ -1,0 +1,20 @@
+# Blueprint de Render para el servicio de WhatsApp.
+# Crea un Web Service con disco persistente para alertas.db.
+services:
+  - type: web
+    name: eero-alertas-whatsapp
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    disk:
+      name: datos
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: DB_PATH
+        value: /var/data/alertas.db
+      - key: DRY_RUN
+        value: "false"
+      # Los demas (EERO_ADMIN_TOKEN, WA_TOKEN, WA_PHONE_NUMBER_ID,
+      # WA_TEMPLATE_NAME, WA_RECIPIENTS, WA_VERIFY_TOKEN, etc.) se cargan
+      # como variables de entorno en el panel de Render (Environment).

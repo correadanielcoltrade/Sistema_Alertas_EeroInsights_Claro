@@ -1,0 +1,23 @@
+# Secretos
+.env
+*.env
+!.env.example
+cookie.txt
+
+# Base de datos de estado
+*.db
+
+# Entorno virtual
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
