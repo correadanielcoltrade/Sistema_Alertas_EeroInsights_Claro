@@ -72,25 +72,12 @@ class AlertEngine:
 
     def _block(self, outage, reason, name, is_renotify):
         nid = outage["network_id"]
-        geo = parse_geo_ip(outage.get("geo_ip"))
-        ubic = ", ".join(x for x in [geo.get("city"), geo.get("regionName")] if x) or "N/D"
-        isp = geo.get("isp") or "N/D"
-        accion = "RECORDATORIO - Red sigue CAIDA" if is_renotify else "ALERTA - Red CAIDA"
-        return (
-            f"🚨 {accion}\n\n"
-            f"🌐 Red: {_con_etiqueta(nid, name)} (ID {nid})\n"
-            f"📍 Ubicacion: {ubic}\n"
-            f"🏢 Operador: {isp}\n"
-            f"⛔ Motivo: {reason}\n"
-            f"🕒 Inicio: {_fmt_dt(outage.get('start_time'))}\n"
-            f"⏱️ Duracion: {_duration_text(outage.get('start_time'))}"
-        )
+        estado = "sigue caida" if is_renotify else "CAIDA"
+        return (f"🚨 {_con_etiqueta(nid, name)} ({nid}): {estado} · {reason} · "
+                f"{_duration_text(outage.get('start_time'))}")
 
     def _block_resuelta(self, nid, name):
-        return (
-            f"✅ RESUELTO - Red en linea de nuevo\n\n"
-            f"🌐 Red: {name} (ID {nid})"
-        )
+        return f"✅ {name} ({nid}): recuperada"
 
     def poll_once(self):
         log.info("Consultando interrupciones de red...")
@@ -102,9 +89,7 @@ class AlertEngine:
             return
 
         if not dry and self.store.get_flag("token_fail"):
-            self.collector.add(
-                "✅ Token de eero restablecido\n\nEl monitoreo de eero se reanudo."
-            )
+            self.collector.add("✅ Token de eero restablecido. Monitoreo reanudado.")
             self.store.clear_flag("token_fail")
 
         activas = {str(o["network_id"]): o for o in outages if o.get("end_time") is None}
@@ -137,10 +122,7 @@ class AlertEngine:
         log.error("Token de eero fallo: %s", err)
         dry = getattr(self.collector, "dry_run", False)
         if dry or not self.store.get_flag("token_fail"):
-            self.collector.add(
-                "⚠️ FALLA DEL SISTEMA - Token de eero invalido\n\n"
-                "Renovar el login de eero (401/403). Las caidas NO se estan monitoreando."
-            )
+            self.collector.add("⚠️ Token de eero invalido (401/403). Renovar login de eero.")
             if not dry:
                 self.store.set_flag("token_fail", "1")
         else:

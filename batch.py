@@ -1,14 +1,13 @@
-"""Colector de alertas: acumula bloques detallados y los envia consolidados.
+"""Colector de alertas: acumula lineas concisas y las envia consolidadas.
 
-Como la plantilla de WhatsApp tiene limite de ~1024 caracteres, se empaquetan
-cuantos bloques quepan bajo 'budget' por mensaje; si no caben todos, se parte
-en varios mensajes (plantillas).
+Empaca hasta 'max_count' (10) alertas por mensaje, sin pasar del limite de
+caracteres de la plantilla ('budget'). Si sobran, parte en varios mensajes.
 """
 import logging
 
 log = logging.getLogger("batch")
 
-SEP = "\n\n"  # linea en blanco entre alertas
+SEP = "\n"  # una alerta por linea
 
 
 class Collector:
@@ -19,14 +18,14 @@ class Collector:
     def reset(self):
         self.lines = []
 
-    def add(self, block):
-        self.lines.append(block)
+    def add(self, line):
+        self.lines.append(line)
 
-    def _empaquetar(self, budget):
+    def _empaquetar(self, budget, max_count):
         grupos, actual, tam = [], [], 0
         for blk in self.lines:
             extra = len(blk) + len(SEP)
-            if actual and tam + extra > budget:
+            if actual and (len(actual) >= max_count or tam + extra > budget):
                 grupos.append(actual)
                 actual, tam = [], 0
             actual.append(blk)
@@ -35,10 +34,10 @@ class Collector:
             grupos.append(actual)
         return grupos
 
-    def flush(self, wa, recipients, template, lang, budget=750):
+    def flush(self, wa, recipients, template, lang, budget=900, max_count=10):
         if not self.lines:
             return
-        grupos = self._empaquetar(budget)
+        grupos = self._empaquetar(budget, max_count)
         log.info("Enviando %d alertas en %d mensaje(s) a %d destinatario(s).",
                  len(self.lines), len(grupos), len(recipients))
         for grupo in grupos:

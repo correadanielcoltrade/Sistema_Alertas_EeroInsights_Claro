@@ -61,21 +61,12 @@ class UnhealthyEngine:
         nid = str(net["network_id"])
         sev = net.get("highest_severity", "")
         emoji, label = SEVERITY.get(sev, ("⚪", sev or "?"))
-        accion = "RECORDATORIO - Red sigue NO SALUDABLE" if is_renotify else "ALERTA - Red NO SALUDABLE"
-        return (
-            f"{emoji} {accion} ({label})\n\n"
-            f"🌐 Red: {_con_etiqueta(nid, self._net_name(nid))} (ID {nid})\n"
-            f"🏠 Tipo: {net.get('network_type', 'N/D')}\n"
-            f"⚠️ Problemas: {self._alerts_text(net.get('alerts'))}\n"
-            f"🔢 Ocurrencias (24h): {net.get('count', 'N/D')}\n"
-            f"🕒 Ultima: {_fmt_dt(net.get('last_occurrence'))}"
-        )
+        estado = f"sigue {label}" if is_renotify else label
+        name = _con_etiqueta(nid, self._net_name(nid))
+        return f"{emoji} {name} ({nid}): {estado} · {self._alerts_text(net.get('alerts'))}"
 
     def _block_resuelta(self, nid, name):
-        return (
-            f"✅ RECUPERADA - Red saludable de nuevo\n\n"
-            f"🌐 Red: {name} (ID {nid})"
-        )
+        return f"✅ {name} ({nid}): recuperada (saludable)"
 
     def poll_once(self):
         log.info("Consultando redes no saludables...")

@@ -66,7 +66,7 @@ def poll_cycle(collector, engine, unhealthy, wa):
             log.exception("Error en el ciclo de unhealthy (se continua).")
     collector.flush(
         wa, config.WA_RECIPIENTS, config.WA_TEMPLATE_NAME,
-        config.WA_TEMPLATE_LANG, config.WA_BODY_BUDGET,
+        config.WA_TEMPLATE_LANG, config.WA_BODY_BUDGET, config.WA_BATCH_MAX,
     )
 
 
