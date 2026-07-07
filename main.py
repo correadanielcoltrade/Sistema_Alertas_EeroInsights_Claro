@@ -39,7 +39,10 @@ def build():
         config.WA_TOKEN, config.WA_PHONE_NUMBER_ID,
         api_version=config.WA_API_VERSION, dry_run=config.DRY_RUN,
     )
-    collector = Collector(dry_run=config.DRY_RUN)
+    collector = Collector(
+        wa, config.WA_RECIPIENTS, config.WA_TEMPLATE_NAME, config.WA_TEMPLATE_LANG,
+        budget=config.WA_BODY_BUDGET, max_count=config.WA_BATCH_MAX, dry_run=config.DRY_RUN,
+    )
     engine = AlertEngine(
         eero, collector, store,
         insight_template=config.INSIGHT_URL_TEMPLATE,
@@ -53,7 +56,7 @@ def build():
     return store, wa, collector, engine, unhealthy
 
 
-def poll_cycle(collector, engine, unhealthy, wa):
+def poll_cycle(collector, engine, unhealthy):
     collector.reset()
     try:
         engine.poll_once()
@@ -64,17 +67,14 @@ def poll_cycle(collector, engine, unhealthy, wa):
             unhealthy.poll_once()
         except Exception:  # noqa: BLE001
             log.exception("Error en el ciclo de unhealthy (se continua).")
-    collector.flush(
-        wa, config.WA_RECIPIENTS, config.WA_TEMPLATE_NAME,
-        config.WA_TEMPLATE_LANG, config.WA_BODY_BUDGET, config.WA_BATCH_MAX,
-    )
+    collector.flush()  # envia el consolidado (las nuevas ya salieron aparte)
 
 
 def main():
     store, wa, collector, engine, unhealthy = build()
 
     if len(sys.argv) > 1 and sys.argv[1] == "once":
-        poll_cycle(collector, engine, unhealthy, wa)
+        poll_cycle(collector, engine, unhealthy)
         return
 
     log.info(
@@ -86,11 +86,11 @@ def main():
     sched = BackgroundScheduler(timezone="America/Bogota")
     sched.add_job(
         poll_cycle, "interval", minutes=config.POLL_MINUTES,
-        args=[collector, engine, unhealthy, wa],
+        args=[collector, engine, unhealthy],
         misfire_grace_time=300, coalesce=True,
     )
     sched.start()
-    poll_cycle(collector, engine, unhealthy, wa)  # corrida inmediata
+    poll_cycle(collector, engine, unhealthy)  # corrida inmediata
 
     # Servidor webhook (bloquea). Render enruta el trafico al PORT.
     app = create_app(store, wa)

@@ -70,14 +70,25 @@ class AlertEngine:
         last = datetime.fromisoformat(row["last_alert"])
         return (datetime.now(timezone.utc) - last).total_seconds() / 60 >= self.renotify_minutes
 
-    def _block(self, outage, reason, name, is_renotify):
+    def _detallado(self, outage, reason, name):
         nid = outage["network_id"]
-        estado = "sigue caida" if is_renotify else "CAIDA"
-        return (f"🚨 {_con_etiqueta(nid, name)} ({nid}): {estado} · {reason} · "
-                f"{_duration_text(outage.get('start_time'))}")
+        geo = parse_geo_ip(outage.get("geo_ip"))
+        ubic = ", ".join(x for x in [geo.get("city"), geo.get("regionName")] if x) or "N/D"
+        isp = geo.get("isp") or "N/D"
+        return (
+            f"🚨 ALERTA - Red CAIDA\n\n"
+            f"🌐 Red: {_con_etiqueta(nid, name)} (ID {nid})\n"
+            f"📍 Ubicacion: {ubic}\n"
+            f"🏢 Operador: {isp}\n"
+            f"⛔ Motivo: {reason}\n"
+            f"🕒 Inicio: {_fmt_dt(outage.get('start_time'))}\n"
+            f"⏱️ Duracion: {_duration_text(outage.get('start_time'))}"
+        )
 
-    def _block_resuelta(self, nid, name):
-        return f"✅ {name} ({nid}): recuperada"
+    def _conciso(self, outage, reason, name):
+        nid = outage["network_id"]
+        return (f"🚨 {_con_etiqueta(nid, name)} ({nid}): sigue caida · {reason} · "
+                f"{_duration_text(outage.get('start_time'))}")
 
     def poll_once(self):
         log.info("Consultando interrupciones de red...")
@@ -98,17 +109,23 @@ class AlertEngine:
         for nid, outage in activas.items():
             row = self.store.get(nid)
             es_nueva = row is None
-            if es_nueva or self._should_renotify(row):
+            if es_nueva:
                 name = self._net_name(nid)
                 reason = self._reason_for(outage)
-                self.collector.add(self._block(outage, reason, name, is_renotify=not es_nueva))
-                if not dry:
-                    self.store.upsert_alert(nid, outage.get("start_time"), detalle=reason, name=name)
+                self.collector.send_individual(self._detallado(outage, reason, name))
+            elif self._should_renotify(row):
+                name = self._net_name(nid)
+                reason = self._reason_for(outage)
+                self.collector.add(self._conciso(outage, reason, name))
+            else:
+                continue
+            if not dry:
+                self.store.upsert_alert(nid, outage.get("start_time"), detalle=reason, name=name)
 
         for nid in self.store.all_ids() - set(activas.keys()):
             row = self.store.get(nid)
             name = (row["name"] if row and row["name"] else self._net_name(nid))
-            self.collector.add(self._block_resuelta(nid, name))
+            self.collector.add(f"✅ {name} ({nid}): recuperada")
             if not dry:
                 self.store.record_resolution(
                     "outage", nid, name,

@@ -3,9 +3,12 @@
 Versión WhatsApp del bot. Monitorea eero cada 10 min y envía **alertas
 consolidadas** por WhatsApp, y **responde comandos** (webhook).
 
-- **Alertas** (caídas + unhealthy) → **consolidadas** en formato conciso (1 línea por
+- **Alerta NUEVA** → **mensaje individual detallado** (Red, Tipo, Problemas,
+  Ocurrencias, Última) — sale aparte, de inmediato.
+- **Re-notificaciones y resueltas** → **consolidadas** en formato conciso (1 línea por
   alerta), hasta `WA_BATCH_MAX` (10) por mensaje sin pasar de `WA_BODY_BUDGET`
   caracteres; si sobran, se parten en varios mensajes.
+- Todo usa la **misma plantilla** (solo cambia el contenido de `{{1}}`).
 - **Comandos** (`/estado`, `/soluciones`, `/sin_solucionar`, `/actualizar_labels`, `/help`)
   → llegan por **webhook** y se responden con **texto libre** (ventana de 24h).
 

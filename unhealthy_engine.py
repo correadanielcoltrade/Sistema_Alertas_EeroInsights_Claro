@@ -1,4 +1,8 @@
-"""Motor de redes no saludables para WhatsApp: bloques detallados (consolidado)."""
+"""Motor de redes no saludables para WhatsApp.
+
+Alerta NUEVA -> mensaje individual detallado. Re-notificacion / resuelta ->
+linea concisa que se consolida.
+"""
 import logging
 from datetime import datetime, timezone, timedelta
 
@@ -57,16 +61,23 @@ class UnhealthyEngine:
         last = datetime.fromisoformat(row["last_alert"])
         return (datetime.now(timezone.utc) - last).total_seconds() / 60 >= self.renotify_minutes
 
-    def _block(self, net, is_renotify):
+    def _detallado(self, net):
         nid = str(net["network_id"])
-        sev = net.get("highest_severity", "")
-        emoji, label = SEVERITY.get(sev, ("⚪", sev or "?"))
-        estado = f"sigue {label}" if is_renotify else label
-        name = _con_etiqueta(nid, self._net_name(nid))
-        return f"{emoji} {name} ({nid}): {estado} · {self._alerts_text(net.get('alerts'))}"
+        emoji, label = SEVERITY.get(net.get("highest_severity", ""), ("⚪", "?"))
+        return (
+            f"{emoji} ALERTA - Red NO SALUDABLE ({label})\n\n"
+            f"🌐 Red: {_con_etiqueta(nid, self._net_name(nid))} (ID {nid})\n"
+            f"🏠 Tipo: {net.get('network_type', 'N/D')}\n"
+            f"⚠️ Problemas: {self._alerts_text(net.get('alerts'))}\n"
+            f"🔢 Ocurrencias (24h): {net.get('count', 'N/D')}\n"
+            f"🕒 Ultima: {_fmt_dt(net.get('last_occurrence'))}"
+        )
 
-    def _block_resuelta(self, nid, name):
-        return f"✅ {name} ({nid}): recuperada (saludable)"
+    def _conciso(self, net):
+        nid = str(net["network_id"])
+        emoji, label = SEVERITY.get(net.get("highest_severity", ""), ("⚪", "?"))
+        name = _con_etiqueta(nid, self._net_name(nid))
+        return f"{emoji} {name} ({nid}): sigue {label} · {self._alerts_text(net.get('alerts'))}"
 
     def poll_once(self):
         log.info("Consultando redes no saludables...")
@@ -83,18 +94,22 @@ class UnhealthyEngine:
         for nid, net in activos.items():
             row = self.store.get(nid, kind=self.KIND)
             es_nueva = row is None
-            if es_nueva or self._should_renotify(row):
-                self.collector.add(self._block(net, is_renotify=not es_nueva))
-                if not dry:
-                    self.store.upsert_alert(
-                        nid, net.get("highest_severity"), kind=self.KIND,
-                        detalle=self._alerts_text(net.get("alerts")), name=self._net_name(nid),
-                    )
+            if es_nueva:
+                self.collector.send_individual(self._detallado(net))  # detallado, aparte
+            elif self._should_renotify(row):
+                self.collector.add(self._conciso(net))                # conciso, consolidado
+            else:
+                continue
+            if not dry:
+                self.store.upsert_alert(
+                    nid, net.get("highest_severity"), kind=self.KIND,
+                    detalle=self._alerts_text(net.get("alerts")), name=self._net_name(nid),
+                )
 
         for nid in self.store.all_ids(kind=self.KIND) - set(activos.keys()):
             row = self.store.get(nid, kind=self.KIND)
             name = (row["name"] if row and row["name"] else self._net_name(nid))
-            self.collector.add(self._block_resuelta(nid, name))
+            self.collector.add(f"✅ {name} ({nid}): recuperada (saludable)")
             if not dry:
                 self.store.record_resolution(
                     self.KIND, nid, name,
