@@ -85,10 +85,11 @@ class AlertEngine:
             f"⏱️ Duracion: {_duration_text(outage.get('start_time'))}"
         )
 
-    def _conciso(self, outage, reason, name):
+    def _conciso(self, outage, name):
+        # En el consolidado NO se muestran motivo ni duracion (solo van en el
+        # mensaje individual detallado de la caida).
         nid = outage["network_id"]
-        return (f"🚨 {_con_etiqueta(nid, name)} ({nid}): sigue caida · {reason} · "
-                f"{_duration_text(outage.get('start_time'))}")
+        return f"🚨 {_con_etiqueta(nid, name)} ({nid}): sigue caida"
 
     def poll_once(self):
         log.info("Consultando interrupciones de red...")
@@ -115,8 +116,8 @@ class AlertEngine:
                 self.collector.send_individual(self._detallado(outage, reason, name))
             elif self._should_renotify(row):
                 name = self._net_name(nid)
-                reason = self._reason_for(outage)
-                self.collector.add(self._conciso(outage, reason, name))
+                reason = self._reason_for(outage)  # se guarda como detalle (p. ej. /soluciones)
+                self.collector.add(self._conciso(outage, name))
             else:
                 continue
             if not dry:
