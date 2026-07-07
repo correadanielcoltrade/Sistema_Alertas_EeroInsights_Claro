@@ -2,14 +2,7 @@
 
 Formato WhatsApp: *negrita*  _cursiva_ . Un solo mensaje consolidado por comando.
 """
-import logging
-import os
 from datetime import datetime, timezone, timedelta
-
-import actualizar_labels
-import network_labels
-
-log = logging.getLogger("commands")
 
 COT = timezone(timedelta(hours=-5))
 
@@ -22,7 +15,6 @@ def help_text():
         "/estado - resumen de novedades activas\n"
         "/soluciones - redes solucionadas hoy\n"
         "/sin_solucionar - redes pendientes (tiempo y avisos)\n"
-        "/actualizar_labels <cookie> - refresca labels/nicknames\n"
         "/help - muestra este menu"
     )
 
@@ -91,44 +83,16 @@ def sin_solucionar_text(store):
     return "\n".join(partes)
 
 
-def actualizar_labels_text(cookie):
-    if not cookie and os.path.exists(actualizar_labels.COOKIE_FILE):
-        cookie = open(actualizar_labels.COOKIE_FILE, encoding="utf-8").read().strip()
-    if not cookie:
-        return ("⚠️ Necesito la cookie de Insight. Envia:\n"
-                "/actualizar_labels PEGA_AQUI_LA_COOKIE")
-    try:
-        resumen = actualizar_labels.refresh(cookie)
-        try:
-            with open(actualizar_labels.COOKIE_FILE, "w", encoding="utf-8") as f:
-                f.write(cookie)
-        except OSError:
-            pass
-        network_labels.reload()
-        return "✅ " + resumen + " Ya aplica en las proximas alertas."
-    except SystemExit as e:
-        return "❌ " + str(e)
-    except Exception as e:  # noqa: BLE001
-        log.exception("Fallo actualizar_labels")
-        return "❌ Error: " + str(e)
-
-
 def dispatch(text, store):
     """Devuelve el texto de respuesta para un mensaje entrante."""
     text = (text or "").strip()
     if not text.startswith("/"):
         return help_text()
-    parts = text.split(None, 1)
-    cmd = parts[0][1:].lower()
-    args = parts[1].strip() if len(parts) > 1 else ""
-    if cmd in ("help", "menu", "ayuda", "comandos"):
-        return help_text()
+    cmd = text.split()[0][1:].lower()
     if cmd == "estado":
         return estado_text(store)
     if cmd in ("soluciones", "solucionadas"):
         return soluciones_text(store)
     if cmd in ("sin_solucionar", "pendientes"):
         return sin_solucionar_text(store)
-    if cmd == "actualizar_labels":
-        return actualizar_labels_text(args)
     return help_text()
