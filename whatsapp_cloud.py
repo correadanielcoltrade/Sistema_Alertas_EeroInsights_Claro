@@ -27,7 +27,8 @@ class WhatsAppCloud:
             body = payload.get("text", {}).get("body")
             if body is None and payload.get("template"):
                 comps = payload["template"].get("components", [])
-                body = comps[0]["parameters"][0]["text"] if comps else "(plantilla)"
+                params = comps[0]["parameters"] if comps else []
+                body = "\n".join(f"  {{{{{i+1}}}}} = {p['text']}" for i, p in enumerate(params))
             print(body)
             print("=" * 60 + "\n")
             return True
@@ -42,8 +43,11 @@ class WhatsAppCloud:
             log.error("WhatsApp %s error: %s", descr, e)
             return False
 
-    def send_template(self, to, template_name, lang, body_text):
-        """Envia una plantilla con una sola variable de cuerpo ({{1}})."""
+    def send_template(self, to, template_name, lang, params):
+        """Envia una plantilla. 'params' puede ser un string (1 variable) o una
+        lista de strings para {{1}}, {{2}}, ..."""
+        if isinstance(params, str):
+            params = [params]
         payload = {
             "messaging_product": "whatsapp",
             "to": to,
@@ -54,7 +58,9 @@ class WhatsAppCloud:
                 "components": [
                     {
                         "type": "body",
-                        "parameters": [{"type": "text", "text": body_text}],
+                        # Meta rechaza parametros vacios -> se reemplazan por "-".
+                        "parameters": [{"type": "text", "text": (str(p).strip() or "-")}
+                                       for p in params],
                     }
                 ],
             },

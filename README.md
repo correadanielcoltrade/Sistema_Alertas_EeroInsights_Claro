@@ -8,7 +8,8 @@ consolidadas** por WhatsApp, y **responde comandos** (webhook).
 - **Re-notificaciones y resueltas** → **consolidadas** en formato conciso (1 línea por
   alerta), hasta `WA_BATCH_MAX` (10) por mensaje sin pasar de `WA_BODY_BUDGET`
   caracteres; si sobran, se parten en varios mensajes.
-- Todo usa la **misma plantilla** (solo cambia el contenido de `{{1}}`).
+- Se usan **dos plantillas**: una **individual** (8 variables) para las nuevas y una
+  **consolidado** (1 variable) para el recordatorio.
 - **Comandos** (`/estado`, `/soluciones`, `/sin_solucionar`, `/actualizar_labels`, `/help`)
   → llegan por **webhook** y se responden con **texto libre** (ventana de 24h).
 
@@ -20,17 +21,32 @@ Un solo servicio (Render Web Service):
 ## Requisitos en Meta (WhatsApp Cloud API)
 1. **App** con producto WhatsApp + número verificado.
 2. **Phone Number ID** y **token permanente** (System User).
-3. **Plantilla aprobada** (categoría *Utility*) con **una variable de cuerpo**:
+3. **Dos plantillas aprobadas** (categoría *Utility*):
+
+   **a) Individual** (8 variables) → `WA_TEMPLATE_INDIVIDUAL` (ej. `alerta_individual`):
    ```
-   Alertas de red eero 👇
+   🟠 *ALERTA - {{1}}*
+
+   🌐 *Red:* {{2}} (ID {{3}})
+   🏠 *Tipo:* {{4}}
+   ⚠️ *Problema:* {{5}}
+   📅 *Ocurrencias en 24h:* {{6}}
+   🕒 *Última:* {{7}}
+
+   👉 *Atender en Eero Insight:* {{8}}
+
+   Se volverá a notificar en 10 minutos si no se ha solucionado.
+   ```
+
+   **b) Consolidado** (1 variable) → `WA_TEMPLATE_CONSOL` (ej. `recordatorio_consolidado`):
+   ```
+   Recordatorio de redes eero sin solución 👇
 
    {{1}}
 
-   Se volvera a notificar en 10 min si sigue asi.
+   👉 Atender en Eero Insights: https://insight.eero.com/networks
    ```
-   Anota su **nombre** (`WA_TEMPLATE_NAME`) e **idioma** (`WA_TEMPLATE_LANG`, ej. `es`).
-   > El link a Insights lo agrega el bot dentro de `{{1}}` (específico por red en las
-   > alertas nuevas, genérico en el consolidado). Por eso ya no va fijo en la plantilla.
+   Anota el **nombre** y el **idioma** de cada una.
 4. **Números destino** (`WA_RECIPIENTS`).
 5. Una palabra secreta para el webhook (`WA_VERIFY_TOKEN`, la inventas tú).
 

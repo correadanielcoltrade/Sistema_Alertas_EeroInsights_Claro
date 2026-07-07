@@ -61,24 +61,26 @@ class UnhealthyEngine:
         last = datetime.fromisoformat(row["last_alert"])
         return (datetime.now(timezone.utc) - last).total_seconds() / 60 >= self.renotify_minutes
 
-    def _detallado(self, net):
+    def _params_individual(self, net):
+        """Lista de 8 variables para la plantilla individual."""
         nid = str(net["network_id"])
-        emoji, label = SEVERITY.get(net.get("highest_severity", ""), ("⚪", "?"))
-        return (
-            f"{emoji} ALERTA - Red NO SALUDABLE ({label})\n\n"
-            f"🌐 Red: {_con_etiqueta(nid, self._net_name(nid))} (ID {nid})\n"
-            f"🏠 Tipo: {net.get('network_type', 'N/D')}\n"
-            f"⚠️ Problemas: {self._alerts_text(net.get('alerts'))}\n"
-            f"🔢 Ocurrencias (24h): {net.get('count', 'N/D')}\n"
-            f"🕒 Ultima: {_fmt_dt(net.get('last_occurrence'))}\n\n"
-            f"👉 Atender: {self.insight_template.format(network_id=nid)}"
-        )
+        _, label = SEVERITY.get(net.get("highest_severity", ""), ("⚪", "?"))
+        return [
+            f"Red NO SALUDABLE ({label})",                       # {{1}}
+            _con_etiqueta(nid, self._net_name(nid)),             # {{2}}
+            nid,                                                 # {{3}}
+            net.get("network_type", "N/D"),                      # {{4}}
+            self._alerts_text(net.get("alerts")),                # {{5}}
+            str(net.get("count", "N/D")),                        # {{6}}
+            _fmt_dt(net.get("last_occurrence")),                 # {{7}}
+            self.insight_template.format(network_id=nid),        # {{8}}
+        ]
 
     def _conciso(self, net):
         nid = str(net["network_id"])
         emoji, label = SEVERITY.get(net.get("highest_severity", ""), ("⚪", "?"))
         name = _con_etiqueta(nid, self._net_name(nid))
-        return f"{emoji} {name} ({nid}): sigue {label} · {self._alerts_text(net.get('alerts'))}"
+        return f"{emoji} {name} ({nid}): Estado {label}"
 
     def poll_once(self):
         log.info("Consultando redes no saludables...")
@@ -96,9 +98,9 @@ class UnhealthyEngine:
             row = self.store.get(nid, kind=self.KIND)
             es_nueva = row is None
             if es_nueva:
-                self.collector.send_individual(self._detallado(net))  # detallado, aparte
+                self.collector.send_individual(self._params_individual(net))  # individual
             elif self._should_renotify(row):
-                self.collector.add(self._conciso(net))                # conciso, consolidado
+                self.collector.add(self._conciso(net))                        # consolidado
             else:
                 continue
             if not dry:

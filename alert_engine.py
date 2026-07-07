@@ -70,27 +70,31 @@ class AlertEngine:
         last = datetime.fromisoformat(row["last_alert"])
         return (datetime.now(timezone.utc) - last).total_seconds() / 60 >= self.renotify_minutes
 
-    def _detallado(self, outage, reason, name):
+    def _params_individual(self, outage, reason, name):
+        """Lista de 8 variables para la plantilla individual (mapea la caida).
+
+        La plantilla es de estilo unhealthy; para caidas: Problema=motivo (con
+        duracion), Ocurrencias=N/A, Ultima=hora de inicio.
+        """
         nid = outage["network_id"]
         geo = parse_geo_ip(outage.get("geo_ip"))
         ubic = ", ".join(x for x in [geo.get("city"), geo.get("regionName")] if x) or "N/D"
-        isp = geo.get("isp") or "N/D"
-        return (
-            f"🚨 ALERTA - Red CAIDA\n\n"
-            f"🌐 Red: {_con_etiqueta(nid, name)} (ID {nid})\n"
-            f"📍 Ubicacion: {ubic}\n"
-            f"🏢 Operador: {isp}\n"
-            f"⛔ Motivo: {reason}\n"
-            f"🕒 Inicio: {_fmt_dt(outage.get('start_time'))}\n"
-            f"⏱️ Duracion: {_duration_text(outage.get('start_time'))}\n\n"
-            f"👉 Atender: {self.insight_template.format(network_id=nid)}"
-        )
+        tipo = (self.eero.network_info(nid).get("network_customer_type") or "N/D")
+        return [
+            "Red CAIDA",                                                    # {{1}}
+            _con_etiqueta(nid, name),                                       # {{2}}
+            str(nid),                                                       # {{3}}
+            f"{tipo} ({ubic})",                                             # {{4}}
+            f"{reason} (lleva {_duration_text(outage.get('start_time'))})",  # {{5}}
+            "N/A",                                                          # {{6}}
+            _fmt_dt(outage.get("start_time")),                              # {{7}}
+            self.insight_template.format(network_id=nid),                   # {{8}}
+        ]
 
     def _conciso(self, outage, name):
-        # En el consolidado NO se muestran motivo ni duracion (solo van en el
-        # mensaje individual detallado de la caida).
+        # En el consolidado la caida solo muestra el estado (sin motivo/duracion).
         nid = outage["network_id"]
-        return f"🚨 {_con_etiqueta(nid, name)} ({nid}): sigue caida"
+        return f"🚨 {_con_etiqueta(nid, name)} ({nid}): Estado caida"
 
     def poll_once(self):
         log.info("Consultando interrupciones de red...")
@@ -114,7 +118,7 @@ class AlertEngine:
             if es_nueva:
                 name = self._net_name(nid)
                 reason = self._reason_for(outage)
-                self.collector.send_individual(self._detallado(outage, reason, name))
+                self.collector.send_individual(self._params_individual(outage, reason, name))
             elif self._should_renotify(row):
                 name = self._net_name(nid)
                 reason = self._reason_for(outage)  # se guarda como detalle (p. ej. /soluciones)

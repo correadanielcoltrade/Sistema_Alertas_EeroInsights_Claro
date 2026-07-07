@@ -1,9 +1,8 @@
-"""Colector/emisor de alertas por WhatsApp.
+"""Colector/emisor de alertas por WhatsApp (dos plantillas).
 
-- send_individual(bloque): envia YA un mensaje aparte (alertas NUEVAS, detallado).
-- add(linea) + flush(): consolida re-notificaciones/resueltas (hasta max_count
-  por mensaje, sin pasar de budget caracteres) y las envia al final del ciclo.
-Ambos usan la misma plantilla (solo cambia el contenido de {{1}}).
+- send_individual(params): alerta NUEVA -> plantilla INDIVIDUAL (8 variables).
+- add(linea) + flush(): re-notificaciones/resueltas -> plantilla CONSOLIDADO
+  (1 variable con hasta max_count lineas, sin pasar de budget caracteres).
 """
 import logging
 
@@ -13,24 +12,26 @@ SEP = "\n"  # una alerta por linea en el consolidado
 
 
 class Collector:
-    def __init__(self, wa, recipients, template, lang,
-                 budget=900, max_count=10, dry_run=False, footer_url=""):
+    def __init__(self, wa, recipients,
+                 tpl_indiv, lang_indiv, tpl_consol, lang_consol,
+                 budget=900, max_count=10, dry_run=False):
         self.wa = wa
         self.recipients = recipients
-        self.template = template
-        self.lang = lang
+        self.tpl_indiv = tpl_indiv
+        self.lang_indiv = lang_indiv
+        self.tpl_consol = tpl_consol
+        self.lang_consol = lang_consol
         self.budget = budget
         self.max_count = max_count
         self.dry_run = dry_run
-        self.footer_url = footer_url  # link generico al final del consolidado
         self.lines = []
 
-    # ---- individuales (alertas nuevas, formato detallado) ----
-    def send_individual(self, body):
+    # ---- individuales (alertas nuevas, plantilla de 8 variables) ----
+    def send_individual(self, params):
         for to in self.recipients:
-            self.wa.send_template(to, self.template, self.lang, body)
+            self.wa.send_template(to, self.tpl_indiv, self.lang_indiv, params)
 
-    # ---- consolidado (re-notificaciones / resueltas) ----
+    # ---- consolidado (plantilla de 1 variable) ----
     def reset(self):
         self.lines = []
 
@@ -58,8 +59,6 @@ class Collector:
                  len(self.lines), len(grupos), len(self.recipients))
         for grupo in grupos:
             cuerpo = SEP.join(grupo)
-            if self.footer_url:
-                cuerpo += f"\n\n👉 Ver en Insights: {self.footer_url}"
             for to in self.recipients:
-                self.wa.send_template(to, self.template, self.lang, cuerpo)
+                self.wa.send_template(to, self.tpl_consol, self.lang_consol, [cuerpo])
         self.reset()

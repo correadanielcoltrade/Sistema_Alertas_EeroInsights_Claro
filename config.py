@@ -43,9 +43,13 @@ INSIGHT_BASE = INSIGHT_URL_TEMPLATE.split("/{")[0]
 WA_TOKEN = _get("WA_TOKEN")                     # token permanente (System User)
 WA_PHONE_NUMBER_ID = _get("WA_PHONE_NUMBER_ID")  # id del numero emisor
 WA_API_VERSION = _get("WA_API_VERSION", "v21.0")
-# Plantilla aprobada para las alertas proactivas (1 variable de cuerpo).
-WA_TEMPLATE_NAME = _get("WA_TEMPLATE_NAME", "alertas_eero")
-WA_TEMPLATE_LANG = _get("WA_TEMPLATE_LANG", "es")
+# Dos plantillas aprobadas:
+#  - Individual (8 variables): para cada alerta NUEVA.
+#  - Consolidado (1 variable): para el recordatorio de re-notificaciones/resueltas.
+WA_TEMPLATE_INDIVIDUAL = _get("WA_TEMPLATE_INDIVIDUAL", "alerta_individual")
+WA_TEMPLATE_INDIVIDUAL_LANG = _get("WA_TEMPLATE_INDIVIDUAL_LANG", "es")
+WA_TEMPLATE_CONSOL = _get("WA_TEMPLATE_CONSOL", "recordatorio_consolidado")
+WA_TEMPLATE_CONSOL_LANG = _get("WA_TEMPLATE_CONSOL_LANG", "es")
 # Numeros destino de las alertas (coma-separados, solo digitos con indicativo).
 WA_RECIPIENTS = _list("WA_RECIPIENTS")
 # Token que TU inventas para verificar el webhook con Meta.
