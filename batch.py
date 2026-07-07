@@ -14,7 +14,7 @@ SEP = "\n"  # una alerta por linea en el consolidado
 
 class Collector:
     def __init__(self, wa, recipients, template, lang,
-                 budget=900, max_count=10, dry_run=False):
+                 budget=900, max_count=10, dry_run=False, footer_url=""):
         self.wa = wa
         self.recipients = recipients
         self.template = template
@@ -22,6 +22,7 @@ class Collector:
         self.budget = budget
         self.max_count = max_count
         self.dry_run = dry_run
+        self.footer_url = footer_url  # link generico al final del consolidado
         self.lines = []
 
     # ---- individuales (alertas nuevas, formato detallado) ----
@@ -57,6 +58,8 @@ class Collector:
                  len(self.lines), len(grupos), len(self.recipients))
         for grupo in grupos:
             cuerpo = SEP.join(grupo)
+            if self.footer_url:
+                cuerpo += f"\n\n👉 Ver en Insights: {self.footer_url}"
             for to in self.recipients:
                 self.wa.send_template(to, self.template, self.lang, cuerpo)
         self.reset()

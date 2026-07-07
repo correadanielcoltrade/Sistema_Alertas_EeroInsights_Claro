@@ -82,7 +82,8 @@ class AlertEngine:
             f"🏢 Operador: {isp}\n"
             f"⛔ Motivo: {reason}\n"
             f"🕒 Inicio: {_fmt_dt(outage.get('start_time'))}\n"
-            f"⏱️ Duracion: {_duration_text(outage.get('start_time'))}"
+            f"⏱️ Duracion: {_duration_text(outage.get('start_time'))}\n\n"
+            f"👉 Atender: {self.insight_template.format(network_id=nid)}"
         )
 
     def _conciso(self, outage, name):

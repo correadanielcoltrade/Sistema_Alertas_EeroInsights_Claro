@@ -26,12 +26,11 @@ Un solo servicio (Render Web Service):
 
    {{1}}
 
-   👉 Atender en Eero Insights:
-   https://insight.eero.com/networks
-
    Se volvera a notificar en 10 min si sigue asi.
    ```
    Anota su **nombre** (`WA_TEMPLATE_NAME`) e **idioma** (`WA_TEMPLATE_LANG`, ej. `es`).
+   > El link a Insights lo agrega el bot dentro de `{{1}}` (específico por red en las
+   > alertas nuevas, genérico en el consolidado). Por eso ya no va fijo en la plantilla.
 4. **Números destino** (`WA_RECIPIENTS`).
 5. Una palabra secreta para el webhook (`WA_VERIFY_TOKEN`, la inventas tú).
 

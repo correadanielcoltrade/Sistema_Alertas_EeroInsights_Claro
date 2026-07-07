@@ -70,7 +70,8 @@ class UnhealthyEngine:
             f"🏠 Tipo: {net.get('network_type', 'N/D')}\n"
             f"⚠️ Problemas: {self._alerts_text(net.get('alerts'))}\n"
             f"🔢 Ocurrencias (24h): {net.get('count', 'N/D')}\n"
-            f"🕒 Ultima: {_fmt_dt(net.get('last_occurrence'))}"
+            f"🕒 Ultima: {_fmt_dt(net.get('last_occurrence'))}\n\n"
+            f"👉 Atender: {self.insight_template.format(network_id=nid)}"
         )
 
     def _conciso(self, net):

@@ -36,6 +36,8 @@ RENOTIFY_MINUTES = int(_get("RENOTIFY_MINUTES", "10"))
 INSIGHT_URL_TEMPLATE = _get(
     "INSIGHT_URL_TEMPLATE", "https://insight.eero.com/networks/{network_id}"
 )
+# URL generica (sin id) para el consolidado, derivada de la plantilla.
+INSIGHT_BASE = INSIGHT_URL_TEMPLATE.split("/{")[0]
 
 # --- WhatsApp Cloud API (Meta) ---
 WA_TOKEN = _get("WA_TOKEN")                     # token permanente (System User)

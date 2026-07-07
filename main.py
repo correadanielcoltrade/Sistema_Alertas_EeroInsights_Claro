@@ -41,7 +41,8 @@ def build():
     )
     collector = Collector(
         wa, config.WA_RECIPIENTS, config.WA_TEMPLATE_NAME, config.WA_TEMPLATE_LANG,
-        budget=config.WA_BODY_BUDGET, max_count=config.WA_BATCH_MAX, dry_run=config.DRY_RUN,
+        budget=config.WA_BODY_BUDGET, max_count=config.WA_BATCH_MAX,
+        dry_run=config.DRY_RUN, footer_url=config.INSIGHT_BASE,
     )
     engine = AlertEngine(
         eero, collector, store,
