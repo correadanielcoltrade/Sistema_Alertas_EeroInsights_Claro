@@ -49,8 +49,9 @@ WA_RECIPIENTS = _list("WA_RECIPIENTS")
 # Token que TU inventas para verificar el webhook con Meta.
 WA_VERIFY_TOKEN = _get("WA_VERIFY_TOKEN", "cambia_esta_palabra")
 
-# Cuantas alertas por mensaje consolidado (plantilla).
-BATCH_SIZE = int(_get("BATCH_SIZE", "10"))
+# Presupuesto de caracteres del cuerpo consolidado (limite de plantilla ~1024).
+# Con formato detallado caben ~3-4 alertas por mensaje.
+WA_BODY_BUDGET = int(_get("WA_BODY_BUDGET", "750"))
 
 # --- Monitoreo unhealthy en tiempo real ---
 UNHEALTHY_ENABLED = _get("UNHEALTHY_ENABLED", "true").lower() in ("1", "true", "yes", "si")

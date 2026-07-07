@@ -1,6 +1,6 @@
-"""Motor de redes no saludables para WhatsApp: acumula lineas concisas."""
+"""Motor de redes no saludables para WhatsApp: bloques detallados (consolidado)."""
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from eero_client import EeroAuthError
 import network_labels
@@ -19,10 +19,20 @@ ALERTS_ES = {
 }
 
 
-def _etiqueta(nid):
+def _fmt_dt(iso_str):
+    if not iso_str:
+        return "N/D"
+    try:
+        dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+        return dt.astimezone(timezone(timedelta(hours=-5))).strftime("%Y-%m-%d %H:%M:%S (COT)")
+    except (ValueError, AttributeError):
+        return iso_str
+
+
+def _con_etiqueta(nid, name):
     label, nick = network_labels.get(nid)
     val = nick or label
-    return f" [{val}]" if val else ""
+    return f"{name} [{val}]" if val else name
 
 
 class UnhealthyEngine:
@@ -47,6 +57,26 @@ class UnhealthyEngine:
         last = datetime.fromisoformat(row["last_alert"])
         return (datetime.now(timezone.utc) - last).total_seconds() / 60 >= self.renotify_minutes
 
+    def _block(self, net, is_renotify):
+        nid = str(net["network_id"])
+        sev = net.get("highest_severity", "")
+        emoji, label = SEVERITY.get(sev, ("⚪", sev or "?"))
+        accion = "RECORDATORIO - Red sigue NO SALUDABLE" if is_renotify else "ALERTA - Red NO SALUDABLE"
+        return (
+            f"{emoji} {accion} ({label})\n\n"
+            f"🌐 Red: {_con_etiqueta(nid, self._net_name(nid))} (ID {nid})\n"
+            f"🏠 Tipo: {net.get('network_type', 'N/D')}\n"
+            f"⚠️ Problemas: {self._alerts_text(net.get('alerts'))}\n"
+            f"🔢 Ocurrencias (24h): {net.get('count', 'N/D')}\n"
+            f"🕒 Ultima: {_fmt_dt(net.get('last_occurrence'))}"
+        )
+
+    def _block_resuelta(self, nid, name):
+        return (
+            f"✅ RECUPERADA - Red saludable de nuevo\n\n"
+            f"🌐 Red: {name} (ID {nid})"
+        )
+
     def poll_once(self):
         log.info("Consultando redes no saludables...")
         dry = getattr(self.collector, "dry_run", False)
@@ -63,21 +93,17 @@ class UnhealthyEngine:
             row = self.store.get(nid, kind=self.KIND)
             es_nueva = row is None
             if es_nueva or self._should_renotify(row):
-                sev = net.get("highest_severity", "")
-                emoji, label = SEVERITY.get(sev, ("⚪", sev or "?"))
-                name = self._net_name(nid)
-                alerts = self._alerts_text(net.get("alerts"))
-                estado = label if es_nueva else f"sigue {label}"
-                self.collector.add(f"{emoji} {name}{_etiqueta(nid)} ({nid}): {estado} · {alerts}")
+                self.collector.add(self._block(net, is_renotify=not es_nueva))
                 if not dry:
                     self.store.upsert_alert(
-                        nid, sev, kind=self.KIND, detalle=alerts, name=name
+                        nid, net.get("highest_severity"), kind=self.KIND,
+                        detalle=self._alerts_text(net.get("alerts")), name=self._net_name(nid),
                     )
 
         for nid in self.store.all_ids(kind=self.KIND) - set(activos.keys()):
             row = self.store.get(nid, kind=self.KIND)
             name = (row["name"] if row and row["name"] else self._net_name(nid))
-            self.collector.add(f"✅ {name} ({nid}): recuperada (saludable)")
+            self.collector.add(self._block_resuelta(nid, name))
             if not dry:
                 self.store.record_resolution(
                     self.KIND, nid, name,

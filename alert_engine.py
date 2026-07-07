@@ -1,4 +1,4 @@
-"""Motor de caidas para WhatsApp: acumula lineas concisas (envio consolidado)."""
+"""Motor de caidas para WhatsApp: bloques detallados (envio consolidado)."""
 import logging
 from datetime import datetime, timezone, timedelta
 
@@ -22,7 +22,7 @@ def _fmt_dt(iso_str):
         return "N/D"
     try:
         dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
-        return dt.astimezone(timezone(timedelta(hours=-5))).strftime("%d/%m %H:%M")
+        return dt.astimezone(timezone(timedelta(hours=-5))).strftime("%Y-%m-%d %H:%M:%S (COT)")
     except (ValueError, AttributeError):
         return iso_str
 
@@ -38,10 +38,10 @@ def _duration_text(start_iso):
         return "N/D"
 
 
-def _etiqueta(nid):
+def _con_etiqueta(nid, name):
     label, nick = network_labels.get(nid)
     val = nick or label
-    return f" [{val}]" if val else ""
+    return f"{name} [{val}]" if val else name
 
 
 class AlertEngine:
@@ -53,8 +53,7 @@ class AlertEngine:
         self.renotify_minutes = renotify_minutes
 
     def _net_name(self, network_id):
-        info = self.eero.network_info(network_id)
-        return info.get("name") or f"Red {network_id}"
+        return self.eero.network_info(network_id).get("name") or f"Red {network_id}"
 
     def _reason_for(self, outage):
         try:
@@ -65,11 +64,33 @@ class AlertEngine:
                     return REASONS.get(code, code)
         except Exception as e:  # noqa: BLE001
             log.warning("No se pudo obtener detalle de %s: %s", outage["network_id"], e)
-        return "Sin motivo"
+        return "Sin motivo reportado"
 
     def _should_renotify(self, row):
         last = datetime.fromisoformat(row["last_alert"])
         return (datetime.now(timezone.utc) - last).total_seconds() / 60 >= self.renotify_minutes
+
+    def _block(self, outage, reason, name, is_renotify):
+        nid = outage["network_id"]
+        geo = parse_geo_ip(outage.get("geo_ip"))
+        ubic = ", ".join(x for x in [geo.get("city"), geo.get("regionName")] if x) or "N/D"
+        isp = geo.get("isp") or "N/D"
+        accion = "RECORDATORIO - Red sigue CAIDA" if is_renotify else "ALERTA - Red CAIDA"
+        return (
+            f"🚨 {accion}\n\n"
+            f"🌐 Red: {_con_etiqueta(nid, name)} (ID {nid})\n"
+            f"📍 Ubicacion: {ubic}\n"
+            f"🏢 Operador: {isp}\n"
+            f"⛔ Motivo: {reason}\n"
+            f"🕒 Inicio: {_fmt_dt(outage.get('start_time'))}\n"
+            f"⏱️ Duracion: {_duration_text(outage.get('start_time'))}"
+        )
+
+    def _block_resuelta(self, nid, name):
+        return (
+            f"✅ RESUELTO - Red en linea de nuevo\n\n"
+            f"🌐 Red: {name} (ID {nid})"
+        )
 
     def poll_once(self):
         log.info("Consultando interrupciones de red...")
@@ -81,7 +102,9 @@ class AlertEngine:
             return
 
         if not dry and self.store.get_flag("token_fail"):
-            self.collector.add("✅ Token de eero restablecido. Monitoreo reanudado.")
+            self.collector.add(
+                "✅ Token de eero restablecido\n\nEl monitoreo de eero se reanudo."
+            )
             self.store.clear_flag("token_fail")
 
         activas = {str(o["network_id"]): o for o in outages if o.get("end_time") is None}
@@ -93,18 +116,14 @@ class AlertEngine:
             if es_nueva or self._should_renotify(row):
                 name = self._net_name(nid)
                 reason = self._reason_for(outage)
-                estado = "CAIDA" if es_nueva else "sigue caida"
-                self.collector.add(
-                    f"🚨 {name}{_etiqueta(nid)} ({nid}): {estado} · {reason} · "
-                    f"{_duration_text(outage.get('start_time'))}"
-                )
+                self.collector.add(self._block(outage, reason, name, is_renotify=not es_nueva))
                 if not dry:
                     self.store.upsert_alert(nid, outage.get("start_time"), detalle=reason, name=name)
 
         for nid in self.store.all_ids() - set(activas.keys()):
             row = self.store.get(nid)
             name = (row["name"] if row and row["name"] else self._net_name(nid))
-            self.collector.add(f"✅ {name} ({nid}): recuperada")
+            self.collector.add(self._block_resuelta(nid, name))
             if not dry:
                 self.store.record_resolution(
                     "outage", nid, name,
@@ -116,9 +135,13 @@ class AlertEngine:
 
     def _handle_token_failure(self, err):
         log.error("Token de eero fallo: %s", err)
-        if getattr(self.collector, "dry_run", False) or not self.store.get_flag("token_fail"):
-            self.collector.add("⚠️ Token de eero invalido (401/403). Renovar login de eero.")
-            if not getattr(self.collector, "dry_run", False):
+        dry = getattr(self.collector, "dry_run", False)
+        if dry or not self.store.get_flag("token_fail"):
+            self.collector.add(
+                "⚠️ FALLA DEL SISTEMA - Token de eero invalido\n\n"
+                "Renovar el login de eero (401/403). Las caidas NO se estan monitoreando."
+            )
+            if not dry:
                 self.store.set_flag("token_fail", "1")
         else:
             log.info("Token sigue fallando (ya se notifico).")

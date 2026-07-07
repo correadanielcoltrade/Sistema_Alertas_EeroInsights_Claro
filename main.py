@@ -66,7 +66,7 @@ def poll_cycle(collector, engine, unhealthy, wa):
             log.exception("Error en el ciclo de unhealthy (se continua).")
     collector.flush(
         wa, config.WA_RECIPIENTS, config.WA_TEMPLATE_NAME,
-        config.WA_TEMPLATE_LANG, config.BATCH_SIZE,
+        config.WA_TEMPLATE_LANG, config.WA_BODY_BUDGET,
     )
 
 
@@ -78,8 +78,8 @@ def main():
         return
 
     log.info(
-        "Iniciando WhatsApp. Poll cada %d min | re-notif %d min | lote %d | DRY_RUN=%s | destinatarios=%d",
-        config.POLL_MINUTES, config.RENOTIFY_MINUTES, config.BATCH_SIZE,
+        "Iniciando WhatsApp. Poll cada %d min | re-notif %d min | budget %d | DRY_RUN=%s | destinatarios=%d",
+        config.POLL_MINUTES, config.RENOTIFY_MINUTES, config.WA_BODY_BUDGET,
         config.DRY_RUN, len(config.WA_RECIPIENTS),
     )
 

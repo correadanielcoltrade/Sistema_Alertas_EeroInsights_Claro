@@ -3,8 +3,9 @@
 Versión WhatsApp del bot. Monitorea eero cada 10 min y envía **alertas
 consolidadas** por WhatsApp, y **responde comandos** (webhook).
 
-- **Alertas** (caídas + unhealthy) → se envían **consolidadas, de a `BATCH_SIZE` (10) por
-  mensaje**, usando una **plantilla** aprobada (mensajes proactivos).
+- **Alertas** (caídas + unhealthy) → **consolidadas** en formato detallado; se empacan
+  cuantas quepan bajo `WA_BODY_BUDGET` (~3-4 por mensaje, por el límite de ~1024
+  caracteres de la plantilla) y se parten en varios mensajes si hace falta.
 - **Comandos** (`/estado`, `/soluciones`, `/sin_solucionar`, `/actualizar_labels`, `/help`)
   → llegan por **webhook** y se responden con **texto libre** (ventana de 24h).
 
@@ -18,9 +19,14 @@ Un solo servicio (Render Web Service):
 2. **Phone Number ID** y **token permanente** (System User).
 3. **Plantilla aprobada** (categoría *Utility*) con **una variable de cuerpo**:
    ```
-   Novedades de red eero:
+   Alertas de red eero 👇
 
    {{1}}
+
+   👉 Atender en Eero Insights:
+   https://insight.eero.com/networks
+
+   Se volvera a notificar en 10 min si sigue asi.
    ```
    Anota su **nombre** (`WA_TEMPLATE_NAME`) e **idioma** (`WA_TEMPLATE_LANG`, ej. `es`).
 4. **Números destino** (`WA_RECIPIENTS`).

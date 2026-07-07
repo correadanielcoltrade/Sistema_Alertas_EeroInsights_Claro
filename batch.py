@@ -1,11 +1,14 @@
-"""Colector de alertas: acumula lineas y las envia consolidadas por lotes.
+"""Colector de alertas: acumula bloques detallados y los envia consolidados.
 
-Las alertas son proactivas -> se mandan como PLANTILLA de WhatsApp. Cada
-plantilla lleva una sola variable de cuerpo con hasta BATCH_SIZE lineas.
+Como la plantilla de WhatsApp tiene limite de ~1024 caracteres, se empaquetan
+cuantos bloques quepan bajo 'budget' por mensaje; si no caben todos, se parte
+en varios mensajes (plantillas).
 """
 import logging
 
 log = logging.getLogger("batch")
+
+SEP = "\n\n"  # linea en blanco entre alertas
 
 
 class Collector:
@@ -16,18 +19,30 @@ class Collector:
     def reset(self):
         self.lines = []
 
-    def add(self, line):
-        self.lines.append(line)
+    def add(self, block):
+        self.lines.append(block)
 
-    def flush(self, wa, recipients, template, lang, batch_size=10):
-        """Envia las lineas acumuladas en lotes, a cada destinatario."""
+    def _empaquetar(self, budget):
+        grupos, actual, tam = [], [], 0
+        for blk in self.lines:
+            extra = len(blk) + len(SEP)
+            if actual and tam + extra > budget:
+                grupos.append(actual)
+                actual, tam = [], 0
+            actual.append(blk)
+            tam += extra
+        if actual:
+            grupos.append(actual)
+        return grupos
+
+    def flush(self, wa, recipients, template, lang, budget=750):
         if not self.lines:
             return
-        lotes = [self.lines[i:i + batch_size] for i in range(0, len(self.lines), batch_size)]
+        grupos = self._empaquetar(budget)
         log.info("Enviando %d alertas en %d mensaje(s) a %d destinatario(s).",
-                 len(self.lines), len(lotes), len(recipients))
-        for lote in lotes:
-            cuerpo = "\n".join(lote)
+                 len(self.lines), len(grupos), len(recipients))
+        for grupo in grupos:
+            cuerpo = SEP.join(grupo)
             for to in recipients:
                 wa.send_template(to, template, lang, cuerpo)
         self.reset()
