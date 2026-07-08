@@ -8,7 +8,9 @@ import logging
 
 log = logging.getLogger("batch")
 
-SEP = "\n"  # una alerta por linea en el consolidado
+# WhatsApp NO permite saltos de linea en las variables de plantilla, asi que
+# el consolidado separa las redes con " | " (el emoji inicial marca cada una).
+SEP = " | "
 
 
 class Collector:
