@@ -5,6 +5,7 @@ POST /webhook  -> recibe mensajes entrantes, ejecuta el comando y responde.
 GET  /         -> healthcheck para Render.
 """
 import logging
+import re
 
 from flask import Flask, request
 
@@ -14,11 +15,17 @@ import commands
 log = logging.getLogger("webhook")
 
 
+def _digitos(numero):
+    """Deja solo los digitos (Meta envia el 'from' sin '+')."""
+    return re.sub(r"\D", "", numero or "")
+
+
 def create_app(store, wa):
     app = Flask(__name__)
 
     # Solo estos numeros pueden dar comandos (los del soporte). Vacio = cualquiera.
-    permitidos = set(config.WA_RECIPIENTS)
+    # Se comparan por digitos para que "+57..." y "57..." coincidan.
+    permitidos = {_digitos(n) for n in config.WA_RECIPIENTS}
 
     @app.get("/")
     def health():
@@ -46,9 +53,10 @@ def create_app(store, wa):
                             continue
                         frm = msg.get("from")
                         texto = (msg.get("text") or {}).get("body", "")
-                        if permitidos and frm not in permitidos:
+                        if permitidos and _digitos(frm) not in permitidos:
                             log.info("Mensaje de numero no autorizado: %s", frm)
                             continue
+                        log.info("Comando de %s: %r", frm, texto)
                         respuesta = commands.dispatch(texto, store)
                         wa.send_text(frm, respuesta)
         except Exception:  # noqa: BLE001
