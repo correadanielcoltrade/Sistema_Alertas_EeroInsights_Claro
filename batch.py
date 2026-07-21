@@ -8,10 +8,9 @@ import logging
 
 log = logging.getLogger("batch")
 
-# Las variables de plantilla de WhatsApp NO admiten saltos de linea reales
-# (\n lo rechaza Meta; U+2028 lo muestra roto). Por eso el consolidado va en
-# una sola linea separando las redes con " | " (el emoji inicial marca cada una).
-SEP = " | "
+# PRUEBA: separar el consolidado con salto de linea real (\n) y numerar las
+# alertas. Si Meta lo rechaza (#132018), volver a  SEP = " | "  (una linea).
+SEP = chr(10)  # \n real
 
 
 class Collector:
@@ -61,7 +60,8 @@ class Collector:
         log.info("Consolidado: %d alertas en %d mensaje(s) a %d destinatario(s).",
                  len(self.lines), len(grupos), len(self.recipients))
         for grupo in grupos:
-            cuerpo = SEP.join(grupo)
+            numeradas = [f"{i}. {linea}" for i, linea in enumerate(grupo, 1)]
+            cuerpo = SEP.join(numeradas)
             for to in self.recipients:
                 self.wa.send_template(to, self.tpl_consol, self.lang_consol, [cuerpo])
         self.reset()
