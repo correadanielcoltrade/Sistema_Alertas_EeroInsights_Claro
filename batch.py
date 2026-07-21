@@ -8,9 +8,11 @@ import logging
 
 log = logging.getLogger("batch")
 
-# WhatsApp NO permite saltos de linea en las variables de plantilla, asi que
-# el consolidado separa las redes con " | " (el emoji inicial marca cada una).
-SEP = " | "
+# WhatsApp rechaza "\n" (U+000A) en las variables de plantilla, pero el caracter
+# U+2028 (LINE SEPARATOR) pasa la validacion y WhatsApp lo renderiza como salto
+# de linea -> asi consolidamos en varias lineas con UNA sola variable.
+# Si algun dia Meta lo rechaza, cambia SEP por " | " (una sola linea).
+SEP = chr(0x2028)  # U+2028 LINE SEPARATOR (salto de linea que Meta acepta)
 
 
 class Collector:
