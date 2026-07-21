@@ -9,7 +9,7 @@ COT = timezone(timedelta(hours=-5))
 
 def help_text():
     return (
-        "🤖 *Sistema de Alertas Eero (WhatsApp)*\n\n"
+        "🤖 *Sistema de Alertas eero (WhatsApp)*\n\n"
         "Monitoreo la red cada 10 min y aviso las novedades.\n\n"
         "*Comandos:*\n"
         "/estado - resumen de novedades activas\n"

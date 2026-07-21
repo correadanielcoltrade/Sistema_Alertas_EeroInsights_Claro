@@ -17,8 +17,8 @@ ALERTS_ES = {
     "Wifi network conflict": "Conflicto WiFi",
     "WAN limited by ethernet speed": "WAN limitada por ethernet",
     "High channel utilization": "Alta utilizacion de canal",
-    "Leaf eero outage over 5 min": "Eero secundario caido +5min",
-    "Gateway eero outage over 5 min": "Eero principal caido +5min",
+    "Leaf eero outage over 5 min": "eero secundario caido +5min",
+    "Gateway eero outage over 5 min": "eero principal caido +5min",
     "5 or more Network outages": "5+ caidas de red",
 }
 
