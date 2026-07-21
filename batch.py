@@ -8,9 +8,10 @@ import logging
 
 log = logging.getLogger("batch")
 
-# PRUEBA: separar el consolidado con salto de linea real (\n) y numerar las
-# alertas. Si Meta lo rechaza (#132018), volver a  SEP = " | "  (una linea).
-SEP = chr(10)  # \n real
+# Las variables de plantilla de WhatsApp NO admiten saltos de linea (\n lo
+# rechaza Meta; U+2028 se ve roto). El consolidado va en una linea, numerado
+# y separado por " | " (el numero y el emoji marcan cada red).
+SEP = " | "
 
 
 class Collector:
