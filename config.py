@@ -45,7 +45,7 @@ WA_PHONE_NUMBER_ID = _get("WA_PHONE_NUMBER_ID")  # id del numero emisor
 WA_API_VERSION = _get("WA_API_VERSION", "v21.0")
 # Dos plantillas aprobadas:
 #  - Individual (8 variables): para cada alerta NUEVA.
-#  - Consolidado (1 variable): para el recordatorio de re-notificaciones/resueltas.
+#  - Consolidado (10 variables): una red por variable, para re-notificaciones/resueltas.
 WA_TEMPLATE_INDIVIDUAL = _get("WA_TEMPLATE_INDIVIDUAL", "alerta_individual")
 WA_TEMPLATE_INDIVIDUAL_LANG = _get("WA_TEMPLATE_INDIVIDUAL_LANG", "es")
 WA_TEMPLATE_CONSOL = _get("WA_TEMPLATE_CONSOL", "recordatorio_consolidado")
@@ -55,8 +55,8 @@ WA_RECIPIENTS = _list("WA_RECIPIENTS")
 # Token que TU inventas para verificar el webhook con Meta.
 WA_VERIFY_TOKEN = _get("WA_VERIFY_TOKEN", "cambia_esta_palabra")
 
-# Consolidado: hasta WA_BATCH_MAX alertas por mensaje, sin pasar de WA_BODY_BUDGET
-# caracteres (limite de plantilla ~1024).
+# Consolidado: WA_BATCH_MAX = numero de variables de la plantilla (una red por
+# variable). Debe coincidir con la plantilla aprobada en Meta.
 WA_BATCH_MAX = int(_get("WA_BATCH_MAX", "10"))
 WA_BODY_BUDGET = int(_get("WA_BODY_BUDGET", "900"))
 

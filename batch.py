@@ -2,16 +2,26 @@
 
 - send_individual(params): alerta NUEVA -> plantilla INDIVIDUAL (8 variables).
 - add(linea) + flush(): re-notificaciones/resueltas -> plantilla CONSOLIDADO
-  (1 variable con hasta max_count lineas, sin pasar de budget caracteres).
+  (10 variables: una red por variable, {{1}}..{{10}}).
+
+En la plantilla de Meta cada variable va en su propia linea, p. ej.:
+
+    1. {{1}}
+    2. {{2}}
+    ...
+    10. {{10}}
+
+y cada una llega con el formato "Nombre (network_id): Estado caida".
+Los espacios sobrantes se rellenan con "-" (Meta rechaza variables vacias).
 """
 import logging
 
 log = logging.getLogger("batch")
 
-# Las variables de plantilla de WhatsApp NO admiten saltos de linea (\n lo
-# rechaza Meta; U+2028 se ve roto). El consolidado va en una linea, numerado
-# y separado por " | " (el numero y el emoji marcan cada red).
-SEP = " | "
+# Relleno para las variables no usadas del mensaje.
+SLOT_VACIO = "-"
+# Tope por variable (Meta rechaza el cuerpo si se pasa de ~1024 en total).
+MAX_SLOT_LEN = 90
 
 
 class Collector:
@@ -25,7 +35,8 @@ class Collector:
         self.tpl_consol = tpl_consol
         self.lang_consol = lang_consol
         self.budget = budget
-        self.max_count = max_count
+        # Numero de variables de la plantilla consolidada (una red por variable).
+        self.slots = max_count
         self.dry_run = dry_run
         self.lines = []
 
@@ -34,25 +45,25 @@ class Collector:
         for to in self.recipients:
             self.wa.send_template(to, self.tpl_indiv, self.lang_indiv, params)
 
-    # ---- consolidado (plantilla de 1 variable) ----
+    # ---- consolidado (plantilla de 'slots' variables) ----
     def reset(self):
         self.lines = []
 
     def add(self, line):
         self.lines.append(line)
 
+    @staticmethod
+    def _limpiar(linea):
+        """Una sola linea, sin saltos ni dobles espacios, y acotada."""
+        txt = " ".join(str(linea).split())
+        if len(txt) > MAX_SLOT_LEN:
+            txt = txt[:MAX_SLOT_LEN - 1].rstrip() + "…"
+        return txt or SLOT_VACIO
+
     def _empaquetar(self):
-        grupos, actual, tam = [], [], 0
-        for blk in self.lines:
-            extra = len(blk) + len(SEP)
-            if actual and (len(actual) >= self.max_count or tam + extra > self.budget):
-                grupos.append(actual)
-                actual, tam = [], 0
-            actual.append(blk)
-            tam += extra
-        if actual:
-            grupos.append(actual)
-        return grupos
+        """Parte las lineas en grupos de 'slots' redes (un mensaje por grupo)."""
+        limpias = [self._limpiar(l) for l in self.lines]
+        return [limpias[i:i + self.slots] for i in range(0, len(limpias), self.slots)]
 
     def flush(self):
         if not self.lines:
@@ -61,8 +72,8 @@ class Collector:
         log.info("Consolidado: %d alertas en %d mensaje(s) a %d destinatario(s).",
                  len(self.lines), len(grupos), len(self.recipients))
         for grupo in grupos:
-            numeradas = [f"{i}. {linea}" for i, linea in enumerate(grupo, 1)]
-            cuerpo = SEP.join(numeradas)
+            # Siempre se envian las 'slots' variables: Meta exige todas.
+            params = grupo + [SLOT_VACIO] * (self.slots - len(grupo))
             for to in self.recipients:
-                self.wa.send_template(to, self.tpl_consol, self.lang_consol, [cuerpo])
+                self.wa.send_template(to, self.tpl_consol, self.lang_consol, params)
         self.reset()

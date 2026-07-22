@@ -92,9 +92,9 @@ class AlertEngine:
         ]
 
     def _conciso(self, outage, name):
-        # En el consolidado la caida solo muestra el estado (sin motivo/duracion).
+        # Formato de variable del consolidado: "Nombre (network_id): Estado caida".
         nid = outage["network_id"]
-        return f"🚨 {_con_etiqueta(nid, name)} ({nid}): Estado caida"
+        return f"{_con_etiqueta(nid, name)} ({nid}): Estado caida"
 
     def poll_once(self):
         log.info("Consultando interrupciones de red...")
@@ -131,7 +131,7 @@ class AlertEngine:
         for nid in self.store.all_ids() - set(activas.keys()):
             row = self.store.get(nid)
             name = (row["name"] if row and row["name"] else self._net_name(nid))
-            self.collector.add(f"✅ {name} ({nid}): recuperada")
+            self.collector.add(f"{name} ({nid}): Estado recuperada")
             if not dry:
                 self.store.record_resolution(
                     "outage", nid, name,

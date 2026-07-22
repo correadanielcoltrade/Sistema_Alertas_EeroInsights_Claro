@@ -78,9 +78,9 @@ class UnhealthyEngine:
 
     def _conciso(self, net):
         nid = str(net["network_id"])
-        emoji, label = SEVERITY.get(net.get("highest_severity", ""), ("⚪", "?"))
+        _, label = SEVERITY.get(net.get("highest_severity", ""), ("⚪", "?"))
         name = _con_etiqueta(nid, self._net_name(nid))
-        return f"{emoji} {name} ({nid}): Estado {label}"
+        return f"{name} ({nid}): Estado {label}"
 
     def poll_once(self):
         log.info("Consultando redes no saludables...")
@@ -112,7 +112,7 @@ class UnhealthyEngine:
         for nid in self.store.all_ids(kind=self.KIND) - set(activos.keys()):
             row = self.store.get(nid, kind=self.KIND)
             name = (row["name"] if row and row["name"] else self._net_name(nid))
-            self.collector.add(f"✅ {name} ({nid}): recuperada (saludable)")
+            self.collector.add(f"{name} ({nid}): Estado saludable")
             if not dry:
                 self.store.record_resolution(
                     self.KIND, nid, name,
