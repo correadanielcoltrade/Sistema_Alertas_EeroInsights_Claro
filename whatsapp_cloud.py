@@ -58,7 +58,9 @@ class WhatsAppCloud:
                 "components": [
                     {
                         "type": "body",
-                        # Meta rechaza parametros vacios -> se reemplazan por "-".
+                        # Meta rechaza parametros vacios -> red de seguridad.
+                        # Ojo: el relleno U+200B de batch.py NO es whitespace
+                        # para strip(), asi que sobrevive intacto (invisible).
                         "parameters": [{"type": "text", "text": (str(p).strip() or "-")}
                                        for p in params],
                     }

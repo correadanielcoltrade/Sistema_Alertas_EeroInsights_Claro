@@ -4,22 +4,33 @@
 - add(linea) + flush(): re-notificaciones/resueltas -> plantilla CONSOLIDADO
   (10 variables: una red por variable, {{1}}..{{10}}).
 
-En la plantilla de Meta cada variable va en su propia linea, p. ej.:
+En la plantilla de Meta cada variable va sola en su propia linea, SIN numeracion
+ni vinetas fijas:
 
-    1. {{1}}
-    2. {{2}}
+    {{1}}
+    {{2}}
     ...
-    10. {{10}}
+    {{10}}
 
-y cada una llega con el formato "Nombre (network_id): Estado caida".
-Los espacios sobrantes se rellenan con "-" (Meta rechaza variables vacias).
+La vineta y el numero viajan DENTRO de la variable (ver FORMATO_SLOT), asi los
+cupos sin usar no dejan ningun rastro; si estuvieran en el texto fijo de la
+plantilla quedarian "4." o vinetas sueltas a la vista. Cada variable llega ya
+armada, p. ej. "<rombo azul> 1. Daniel (23261159): Estado caida".
+
+Meta exige que TODAS las variables declaradas lleguen con valor y rechaza las
+vacias, asi que los cupos sobrantes se rellenan con un espacio de ancho cero
+(U+200B): es un caracter valido para Meta pero invisible en WhatsApp, de modo
+que esas lineas quedan en blanco (y WhatsApp recorta las del final).
 """
 import logging
 
 log = logging.getLogger("batch")
 
-# Relleno para las variables no usadas del mensaje.
-SLOT_VACIO = "-"
+# Relleno invisible para las variables no usadas (ver docstring).
+SLOT_VACIO = "\u200b"  # espacio de ancho cero
+# Vineta + numeracion, dentro de la variable. Cambia esto para ajustar el look
+# (p. ej. "{n}. {texto}" sin vineta, o "\u2022 {texto}" sin numero).
+FORMATO_SLOT = "\U0001F539 {n}. {texto}"  # \U0001F539 = rombo azul
 # Tope por variable (Meta rechaza el cuerpo si se pasa de ~1024 en total).
 MAX_SLOT_LEN = 90
 
@@ -53,17 +64,26 @@ class Collector:
         self.lines.append(line)
 
     @staticmethod
-    def _limpiar(linea):
-        """Una sola linea, sin saltos ni dobles espacios, y acotada."""
+    def _limpiar(linea, n):
+        """Arma la variable: vineta + numero + texto en una sola linea acotada.
+
+        Meta rechaza saltos, tabs y >4 espacios seguidos dentro de una variable.
+        """
         txt = " ".join(str(linea).split())
-        if len(txt) > MAX_SLOT_LEN:
-            txt = txt[:MAX_SLOT_LEN - 1].rstrip() + "…"
-        return txt or SLOT_VACIO
+        if not txt:
+            return SLOT_VACIO
+        slot = FORMATO_SLOT.format(n=n, texto=txt)
+        if len(slot) > MAX_SLOT_LEN:
+            slot = slot[:MAX_SLOT_LEN - 1].rstrip() + "…"
+        return slot
 
     def _empaquetar(self):
-        """Parte las lineas en grupos de 'slots' redes (un mensaje por grupo)."""
-        limpias = [self._limpiar(l) for l in self.lines]
-        return [limpias[i:i + self.slots] for i in range(0, len(limpias), self.slots)]
+        """Parte las lineas en grupos de 'slots' redes (un mensaje por grupo).
+
+        La numeracion arranca en 1 en cada mensaje: cada uno se lee solo.
+        """
+        grupos = [self.lines[i:i + self.slots] for i in range(0, len(self.lines), self.slots)]
+        return [[self._limpiar(l, n) for n, l in enumerate(g, 1)] for g in grupos]
 
     def flush(self):
         if not self.lines:
