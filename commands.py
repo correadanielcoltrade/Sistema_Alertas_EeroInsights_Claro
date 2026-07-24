@@ -2,18 +2,24 @@
 
 Formato WhatsApp: *negrita*  _cursiva_ . Un solo mensaje consolidado por comando.
 """
+import re
 from datetime import datetime, timezone, timedelta
 
 COT = timezone(timedelta(hours=-5))
+
+
+def _solo_digitos(s):
+    return re.sub(r"\D", "", s or "")
 
 
 def help_text():
     return (
         "🤖 *Sistema de Alertas eero (WhatsApp)*\n\n"
         "Monitoreo la red cada 10 min y aviso las novedades.\n\n"
-        "*Recibir alertas en este numero:*\n"
+        "*Recibir alertas:*\n"
         "/suscribir - dar de alta este numero ➕\n"
-        "/baja - dejar de recibir alertas ➖\n\n"
+        "/baja - dar de baja este numero ➖\n"
+        "_Tambien: /suscribir 573001112233 para otro numero._\n\n"
         "*Consultas:*\n"
         "/estado - resumen de novedades activas\n"
         "/soluciones - redes solucionadas hoy\n"
@@ -27,33 +33,46 @@ ALTA = {"suscribir", "suscribirme", "alta", "suscribete", "activar"}
 BAJA = {"baja", "desuscribir", "desuscribirme", "cancelar", "salir"}
 
 
-def alta_text(subs, sender):
+_NO_CONFIG = ("⚠️ La autogestion de suscripciones no esta configurada "
+              "(falta la variable DATABASE_URL en el servidor).")
+_DB_ERROR = ("⚠️ No pude conectar con la base de datos en este momento. "
+             "Intenta de nuevo en un minuto.")
+
+
+def _quien(numero, sender):
+    """Texto para el numero afectado: 'este numero' si es el propio, o el numero."""
+    return "este numero" if numero == sender else f"el numero {numero}"
+
+
+def alta_text(subs, numero, sender):
     if subs is None:
-        return "⚠️ La gestion de suscripciones no esta disponible ahora mismo."
-    estado = subs.subscribe(sender)
+        return _NO_CONFIG
+    estado = subs.subscribe(numero)
+    quien = _quien(numero, sender)
     if estado == "nuevo":
-        return ("✅ *Quedaste suscrito* a las alertas de eero en este numero.\n"
-                "Escribe */baja* cuando quieras dejar de recibirlas.")
+        return (f"✅ *Suscrito:* {quien} recibira las alertas de eero.\n"
+                "Escribe */baja* para darlo de baja.")
     if estado == "reactivado":
-        return ("✅ *Reactivamos* las alertas en este numero.\n"
-                "Escribe */baja* para dejar de recibirlas.")
+        return (f"✅ *Reactivado:* {quien} vuelve a recibir alertas.\n"
+                "Escribe */baja* para darlo de baja.")
     if estado == "ya_activo":
-        return ("ℹ️ Este numero *ya estaba suscrito*.\n"
+        return (f"ℹ️ {quien.capitalize()} *ya estaba suscrito*.\n"
                 "Escribe */baja* para dejar de recibir alertas.")
-    return "⚠️ No pude registrar la suscripcion. Intenta de nuevo en un momento."
+    return _DB_ERROR
 
 
-def baja_text(subs, sender):
+def baja_text(subs, numero, sender):
     if subs is None:
-        return "⚠️ La gestion de suscripciones no esta disponible ahora mismo."
-    estado = subs.unsubscribe(sender)
+        return _NO_CONFIG
+    estado = subs.unsubscribe(numero)
+    quien = _quien(numero, sender)
     if estado == "dado_de_baja":
-        return ("✅ *Listo, te diste de baja.* Ya no recibiras alertas en este numero.\n"
+        return (f"✅ *Baja realizada:* {quien} ya no recibira alertas.\n"
                 "Escribe */suscribir* para volver a activarlas.")
     if estado == "no_estaba":
-        return ("ℹ️ Este numero *no estaba suscrito*.\n"
-                "Escribe */suscribir* si quieres recibir alertas.")
-    return "⚠️ No pude procesar la baja. Intenta de nuevo en un momento."
+        return (f"ℹ️ {quien.capitalize()} *no estaba suscrito*.\n"
+                "Escribe */suscribir* para recibir alertas.")
+    return _DB_ERROR
 
 
 def _fmt_local(iso):
@@ -127,12 +146,17 @@ def dispatch(text, store, subs=None, sender=None):
     para las altas/bajas.
     """
     raw = (text or "").strip()
+    partes = raw.split()
     # Primera palabra, sin '/' y en minuscula (acepta "SUSCRIBIR" o "/suscribir").
-    palabra = raw.split()[0].lstrip("/").lower() if raw else ""
+    palabra = partes[0].lstrip("/").lower() if partes else ""
+    # Numero opcional como argumento: "/suscribir 573186388932" (para el soporte).
+    # Si no se pasa, se usa el numero de quien escribe.
+    arg = _solo_digitos(partes[1]) if len(partes) > 1 else ""
+    objetivo = arg or sender
     if palabra in ALTA:
-        return alta_text(subs, sender)
+        return alta_text(subs, objetivo, sender)
     if palabra in BAJA:
-        return baja_text(subs, sender)
+        return baja_text(subs, objetivo, sender)
     if not raw.startswith("/"):
         return help_text()
     cmd = raw.split()[0][1:].lower()

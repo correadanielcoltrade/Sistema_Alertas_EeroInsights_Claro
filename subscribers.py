@@ -38,7 +38,15 @@ class SubscriberStore:
             self.dsn = f"{dsn}{sep}sslmode={sslmode}"
         self.schema = schema
         self.tabla = f"{schema}.receptores_de_alertas"
-        self._init()
+        # No dejamos que un fallo transitorio al arrancar desactive todo: si el
+        # _init falla, se reintenta en la primera operacion (las conexiones son
+        # por-llamada). 'ready' solo es informativo para el log.
+        try:
+            self._init()
+            self.ready = True
+        except psycopg2.Error as e:
+            self.ready = False
+            log.error("No se pudo preparar la tabla al arrancar (se reintenta al usar): %s", e)
 
     def _connect(self):
         return psycopg2.connect(self.dsn, connect_timeout=15)

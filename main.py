@@ -6,6 +6,7 @@ except ImportError:
     pass
 
 import logging
+import re
 import sys
 
 for _s in (sys.stdout, sys.stderr):
@@ -37,23 +38,42 @@ logging.basicConfig(
 log = logging.getLogger("main")
 
 
+def _host_seguro(url):
+    """Extrae el host de la URL de la DB sin exponer la contrasena (para el log)."""
+    m = re.search(r"@([^/:?]+)", url or "")
+    return m.group(1) if m else "?"
+
+
 def _build_subscribers():
-    """Crea el store de receptores en Postgres (o None si no hay DB)."""
-    if not config.DATABASE_URL or SubscriberStore is None:
-        log.warning("Sin DATABASE_URL: se usa WA_RECIPIENTS como lista fija.")
+    """Crea el store de receptores en Postgres (o None si no hay DB configurada).
+
+    Ojo: si DATABASE_URL existe, se devuelve el store SIEMPRE (aunque la DB este
+    momentaneamente caida). Las operaciones se reintentan por-llamada, asi que la
+    autogestion no queda desactivada por un fallo transitorio del arranque.
+    """
+    if SubscriberStore is None:
+        log.warning("psycopg2 no instalado: autogestion DESACTIVADA (fallback WA_RECIPIENTS).")
         return None
-    try:
-        subs = SubscriberStore(
-            config.DATABASE_URL, config.SUBSCRIBERS_SCHEMA, sslmode=config.DB_SSLMODE
-        )
-    except Exception:  # noqa: BLE001
-        log.exception("No se pudo conectar a Postgres; se usa WA_RECIPIENTS.")
+    if not config.DATABASE_URL:
+        log.warning("Sin DATABASE_URL: autogestion DESACTIVADA (fallback WA_RECIPIENTS).")
         return None
+
+    log.info("DATABASE_URL detectada (host=%s, sslmode=%s). Preparando receptores...",
+             _host_seguro(config.DATABASE_URL), config.DB_SSLMODE)
+    subs = SubscriberStore(
+        config.DATABASE_URL, config.SUBSCRIBERS_SCHEMA, sslmode=config.DB_SSLMODE
+    )
     # Migracion: mete los numeros de WA_RECIPIENTS que aun no esten en la tabla.
     for numero in config.WA_RECIPIENTS:
-        estado = subs.subscribe(numero)
-        if estado == "nuevo":
+        if subs.subscribe(numero) == "nuevo":
             log.info("Migrado a receptores: %s", numero)
+
+    activos = subs.active_numbers()
+    if activos is None:
+        log.warning("Autogestion ACTIVA pero la DB no respondio al arrancar "
+                    "(se reintenta al usar). Revisa host/region/credenciales.")
+    else:
+        log.info("Autogestion ACTIVA. Receptores activos: %d.", len(activos))
     return subs
 
 
