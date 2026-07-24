@@ -38,9 +38,16 @@ def create_app(store, wa, subs=None):
 
         Abrir: https://<tu-servicio>.onrender.com/diag
         """
+        import sys
         url = os.getenv("DATABASE_URL")
+        try:
+            import psycopg2
+            pg = psycopg2.__version__
+        except Exception as e:  # noqa: BLE001
+            pg = f"ERROR: {e}"
         info = {
-            "commit_con_autogestion": True,   # si ves esto, el codigo nuevo esta desplegado
+            "python": sys.version.split()[0],
+            "psycopg2": pg,
             "database_url_presente": bool(url),
             "database_url_longitud": len(url) if url else 0,
             "autogestion_activa": subs is not None,
@@ -49,9 +56,6 @@ def create_app(store, wa, subs=None):
             nums = subs.active_numbers()
             info["db_responde"] = nums is not None
             info["receptores_activos"] = len(nums) if nums is not None else 0
-        else:
-            info["pista"] = ("DATABASE_URL no llego al proceso: revisa el nombre "
-                             "exacto de la variable en el Web Service (no en la DB).")
         return info, 200
 
     @app.get("/webhook")
