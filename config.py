@@ -51,7 +51,15 @@ WA_TEMPLATE_INDIVIDUAL_LANG = _get("WA_TEMPLATE_INDIVIDUAL_LANG", "es")
 WA_TEMPLATE_CONSOL = _get("WA_TEMPLATE_CONSOL", "recordatorio_consolidado")
 WA_TEMPLATE_CONSOL_LANG = _get("WA_TEMPLATE_CONSOL_LANG", "es")
 # Numeros destino de las alertas (coma-separados, solo digitos con indicativo).
+# Ahora es solo un FALLBACK: la lista real vive en la tabla de receptores
+# (autogestion por WhatsApp). Se usa si no hay DATABASE_URL o la tabla esta vacia.
 WA_RECIPIENTS = _list("WA_RECIPIENTS")
+
+# --- Receptores de alertas (Postgres, autogestion alta/baja por WhatsApp) ---
+# Cadena de conexion de Render (External Database URL). Si falta, se usa
+# WA_RECIPIENTS como antes.
+DATABASE_URL = _get("DATABASE_URL")
+SUBSCRIBERS_SCHEMA = _get("SUBSCRIBERS_SCHEMA", "eero_insight_whatsapp")
 # Token que TU inventas para verificar el webhook con Meta.
 WA_VERIFY_TOKEN = _get("WA_VERIFY_TOKEN", "cambia_esta_palabra")
 

@@ -20,12 +20,12 @@ def _digitos(numero):
     return re.sub(r"\D", "", numero or "")
 
 
-def create_app(store, wa):
+def create_app(store, wa, subs=None):
     app = Flask(__name__)
 
-    # Solo estos numeros pueden dar comandos (los del soporte). Vacio = cualquiera.
-    # Se comparan por digitos para que "+57..." y "57..." coincidan.
-    permitidos = {_digitos(n) for n in config.WA_RECIPIENTS}
+    # Autogestion: cualquiera puede escribir para suscribirse/darse de baja o
+    # consultar el estado. La lista de destinatarios la controla la tabla, no
+    # una lista blanca aqui.
 
     @app.get("/")
     def health():
@@ -53,11 +53,10 @@ def create_app(store, wa):
                             continue
                         frm = msg.get("from")
                         texto = (msg.get("text") or {}).get("body", "")
-                        if permitidos and _digitos(frm) not in permitidos:
-                            log.info("Mensaje de numero no autorizado: %s", frm)
-                            continue
                         log.info("Comando de %s: %r", frm, texto)
-                        respuesta = commands.dispatch(texto, store)
+                        respuesta = commands.dispatch(
+                            texto, store, subs=subs, sender=_digitos(frm)
+                        )
                         wa.send_text(frm, respuesta)
         except Exception:  # noqa: BLE001
             log.exception("Error procesando webhook.")

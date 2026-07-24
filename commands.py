@@ -11,12 +11,49 @@ def help_text():
     return (
         "🤖 *Sistema de Alertas eero (WhatsApp)*\n\n"
         "Monitoreo la red cada 10 min y aviso las novedades.\n\n"
-        "*Comandos:*\n"
+        "*Recibir alertas en este numero:*\n"
+        "/suscribir - dar de alta este numero ➕\n"
+        "/baja - dejar de recibir alertas ➖\n\n"
+        "*Consultas:*\n"
         "/estado - resumen de novedades activas\n"
         "/soluciones - redes solucionadas hoy\n"
         "/sin_solucionar - redes pendientes (tiempo y avisos)\n"
         "/help - muestra este menu"
     )
+
+
+# Palabras que activan alta/baja (con o sin '/', en mayus o minus).
+ALTA = {"suscribir", "suscribirme", "alta", "suscribete", "activar"}
+BAJA = {"baja", "desuscribir", "desuscribirme", "cancelar", "salir"}
+
+
+def alta_text(subs, sender):
+    if subs is None:
+        return "⚠️ La gestion de suscripciones no esta disponible ahora mismo."
+    estado = subs.subscribe(sender)
+    if estado == "nuevo":
+        return ("✅ *Quedaste suscrito* a las alertas de eero en este numero.\n"
+                "Escribe */baja* cuando quieras dejar de recibirlas.")
+    if estado == "reactivado":
+        return ("✅ *Reactivamos* las alertas en este numero.\n"
+                "Escribe */baja* para dejar de recibirlas.")
+    if estado == "ya_activo":
+        return ("ℹ️ Este numero *ya estaba suscrito*.\n"
+                "Escribe */baja* para dejar de recibir alertas.")
+    return "⚠️ No pude registrar la suscripcion. Intenta de nuevo en un momento."
+
+
+def baja_text(subs, sender):
+    if subs is None:
+        return "⚠️ La gestion de suscripciones no esta disponible ahora mismo."
+    estado = subs.unsubscribe(sender)
+    if estado == "dado_de_baja":
+        return ("✅ *Listo, te diste de baja.* Ya no recibiras alertas en este numero.\n"
+                "Escribe */suscribir* para volver a activarlas.")
+    if estado == "no_estaba":
+        return ("ℹ️ Este numero *no estaba suscrito*.\n"
+                "Escribe */suscribir* si quieres recibir alertas.")
+    return "⚠️ No pude procesar la baja. Intenta de nuevo en un momento."
 
 
 def _fmt_local(iso):
@@ -83,12 +120,22 @@ def sin_solucionar_text(store):
     return "\n".join(partes)
 
 
-def dispatch(text, store):
-    """Devuelve el texto de respuesta para un mensaje entrante."""
-    text = (text or "").strip()
-    if not text.startswith("/"):
+def dispatch(text, store, subs=None, sender=None):
+    """Devuelve el texto de respuesta para un mensaje entrante.
+
+    'subs' es el SubscriberStore (o None) y 'sender' el numero que escribio,
+    para las altas/bajas.
+    """
+    raw = (text or "").strip()
+    # Primera palabra, sin '/' y en minuscula (acepta "SUSCRIBIR" o "/suscribir").
+    palabra = raw.split()[0].lstrip("/").lower() if raw else ""
+    if palabra in ALTA:
+        return alta_text(subs, sender)
+    if palabra in BAJA:
+        return baja_text(subs, sender)
+    if not raw.startswith("/"):
         return help_text()
-    cmd = text.split()[0][1:].lower()
+    cmd = raw.split()[0][1:].lower()
     if cmd == "estado":
         return estado_text(store)
     if cmd in ("soluciones", "solucionadas"):

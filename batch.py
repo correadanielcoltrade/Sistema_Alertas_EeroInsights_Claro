@@ -40,7 +40,9 @@ class Collector:
                  tpl_indiv, lang_indiv, tpl_consol, lang_consol,
                  budget=900, max_count=10, dry_run=False):
         self.wa = wa
-        self.recipients = recipients
+        # 'recipients' puede ser una lista fija o un callable que la devuelve
+        # (para leer los suscriptores activos en cada envio, sin re-desplegar).
+        self._recipients = recipients
         self.tpl_indiv = tpl_indiv
         self.lang_indiv = lang_indiv
         self.tpl_consol = tpl_consol
@@ -51,9 +53,14 @@ class Collector:
         self.dry_run = dry_run
         self.lines = []
 
+    def _dests(self):
+        """Destinatarios actuales (resuelve el callable si lo es)."""
+        dests = self._recipients() if callable(self._recipients) else self._recipients
+        return dests or []
+
     # ---- individuales (alertas nuevas, plantilla de 8 variables) ----
     def send_individual(self, params):
-        for to in self.recipients:
+        for to in self._dests():
             self.wa.send_template(to, self.tpl_indiv, self.lang_indiv, params)
 
     # ---- consolidado (plantilla de 'slots' variables) ----
@@ -89,11 +96,12 @@ class Collector:
         if not self.lines:
             return
         grupos = self._empaquetar()
+        dests = self._dests()
         log.info("Consolidado: %d alertas en %d mensaje(s) a %d destinatario(s).",
-                 len(self.lines), len(grupos), len(self.recipients))
+                 len(self.lines), len(grupos), len(dests))
         for grupo in grupos:
             # Siempre se envian las 'slots' variables: Meta exige todas.
             params = grupo + [SLOT_VACIO] * (self.slots - len(grupo))
-            for to in self.recipients:
+            for to in dests:
                 self.wa.send_template(to, self.tpl_consol, self.lang_consol, params)
         self.reset()
