@@ -26,12 +26,16 @@ def normalizar(numero):
 
 
 class SubscriberStore:
-    def __init__(self, dsn, schema="eero_insight_whatsapp"):
+    def __init__(self, dsn, schema="eero_insight_whatsapp", sslmode="require"):
         if not _NOMBRE_VALIDO.match(schema):
             raise ValueError(f"Nombre de esquema invalido: {schema!r}")
-        # Render Postgres exige SSL en conexiones externas.
-        sep = "&" if "?" in dsn else "?"
-        self.dsn = dsn if "sslmode=" in dsn else f"{dsn}{sep}sslmode=require"
+        # Render Postgres soporta SSL en la URL interna y externa. Si el dsn ya
+        # trae sslmode, se respeta; si no, se agrega el indicado.
+        if "sslmode=" in dsn:
+            self.dsn = dsn
+        else:
+            sep = "&" if "?" in dsn else "?"
+            self.dsn = f"{dsn}{sep}sslmode={sslmode}"
         self.schema = schema
         self.tabla = f"{schema}.receptores_de_alertas"
         self._init()

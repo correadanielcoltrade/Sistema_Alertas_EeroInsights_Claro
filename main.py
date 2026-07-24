@@ -43,7 +43,9 @@ def _build_subscribers():
         log.warning("Sin DATABASE_URL: se usa WA_RECIPIENTS como lista fija.")
         return None
     try:
-        subs = SubscriberStore(config.DATABASE_URL, config.SUBSCRIBERS_SCHEMA)
+        subs = SubscriberStore(
+            config.DATABASE_URL, config.SUBSCRIBERS_SCHEMA, sslmode=config.DB_SSLMODE
+        )
     except Exception:  # noqa: BLE001
         log.exception("No se pudo conectar a Postgres; se usa WA_RECIPIENTS.")
         return None

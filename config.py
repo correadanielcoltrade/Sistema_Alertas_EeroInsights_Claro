@@ -60,6 +60,10 @@ WA_RECIPIENTS = _list("WA_RECIPIENTS")
 # WA_RECIPIENTS como antes.
 DATABASE_URL = _get("DATABASE_URL")
 SUBSCRIBERS_SCHEMA = _get("SUBSCRIBERS_SCHEMA", "eero_insight_whatsapp")
+# Modo SSL para Postgres. 'require' sirve para la URL interna y externa de
+# Render. Si la interna diera problema de SSL, se puede poner 'prefer' o
+# 'disable' sin tocar codigo.
+DB_SSLMODE = _get("DB_SSLMODE", "require")
 # Token que TU inventas para verificar el webhook con Meta.
 WA_VERIFY_TOKEN = _get("WA_VERIFY_TOKEN", "cambia_esta_palabra")
 
