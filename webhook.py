@@ -5,6 +5,7 @@ POST /webhook  -> recibe mensajes entrantes, ejecuta el comando y responde.
 GET  /         -> healthcheck para Render.
 """
 import logging
+import os
 import re
 
 from flask import Flask, request
@@ -30,6 +31,28 @@ def create_app(store, wa, subs=None):
     @app.get("/")
     def health():
         return "ok", 200
+
+    @app.get("/diag")
+    def diag():
+        """Diagnostico visible en el navegador (sin exponer secretos).
+
+        Abrir: https://<tu-servicio>.onrender.com/diag
+        """
+        url = os.getenv("DATABASE_URL")
+        info = {
+            "commit_con_autogestion": True,   # si ves esto, el codigo nuevo esta desplegado
+            "database_url_presente": bool(url),
+            "database_url_longitud": len(url) if url else 0,
+            "autogestion_activa": subs is not None,
+        }
+        if subs is not None:
+            nums = subs.active_numbers()
+            info["db_responde"] = nums is not None
+            info["receptores_activos"] = len(nums) if nums is not None else 0
+        else:
+            info["pista"] = ("DATABASE_URL no llego al proceso: revisa el nombre "
+                             "exacto de la variable en el Web Service (no en la DB).")
+        return info, 200
 
     @app.get("/webhook")
     def verify():
