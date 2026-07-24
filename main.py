@@ -6,6 +6,7 @@ except ImportError:
     pass
 
 import logging
+import os
 import re
 import sys
 
@@ -51,6 +52,16 @@ def _build_subscribers():
     momentaneamente caida). Las operaciones se reintentan por-llamada, asi que la
     autogestion no queda desactivada por un fallo transitorio del arranque.
     """
+    # --- Diagnostico: que ve el proceso realmente (sin exponer valores) ---
+    val = os.getenv("DATABASE_URL")
+    log.info("DIAG DATABASE_URL: presente=%s longitud=%s",
+             val is not None, len(val) if val else 0)
+    relacionadas = sorted(
+        k for k in os.environ
+        if any(t in k.upper() for t in ("DATA", "POSTGRES", "_DB", "DB_", "URL"))
+    )
+    log.info("DIAG variables de entorno relacionadas visibles: %s", relacionadas)
+
     if SubscriberStore is None:
         log.warning("psycopg2 no instalado: autogestion DESACTIVADA (fallback WA_RECIPIENTS).")
         return None
