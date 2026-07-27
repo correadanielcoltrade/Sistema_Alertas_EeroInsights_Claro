@@ -109,25 +109,40 @@ class StateStore:
                 cur = self.conn.execute("SELECT * FROM tracked ORDER BY kind, first_alert")
             return cur.fetchall()
 
-    def upsert_alert(self, item_id, ref=None, kind="outage", detalle=None, name=None):
-        """Registra o actualiza un item cuando se acaba de notificar."""
+    def upsert_alert(self, item_id, ref=None, kind="outage", detalle=None, name=None, bump=True):
+        """Registra o actualiza un item.
+
+        bump=True: cuenta un aviso enviado (incrementa alert_count y refresca
+        last_alert). Usar cuando SI se notifico por WhatsApp.
+        bump=False: solo asegura que el item quede rastreado y actualiza
+        ref/detalle/name, SIN contar aviso ni mover last_alert. Para redes que se
+        siguen pero no se notifican (p. ej. no criticas), de modo que aparezcan en
+        /estado y /sin_solucionar sin inflar el contador de avisos ni el temporizador
+        de re-notificacion.
+        """
         now = datetime.now(timezone.utc).isoformat()
         with self._lock:
             cur = self.conn.execute(
                 "SELECT 1 FROM tracked WHERE kind=? AND item_id=?", (kind, str(item_id))
             )
-            if cur.fetchone():
+            existe = cur.fetchone()
+            if existe and bump:
                 self.conn.execute(
                     "UPDATE tracked SET last_alert=?, alert_count=alert_count+1, "
                     "ref=?, detalle=?, name=? WHERE kind=? AND item_id=?",
                     (now, ref, detalle, name, kind, str(item_id)),
                 )
-            else:
+            elif existe:  # bump=False: refresca datos, no cuenta aviso.
+                self.conn.execute(
+                    "UPDATE tracked SET ref=?, detalle=?, name=? WHERE kind=? AND item_id=?",
+                    (ref, detalle, name, kind, str(item_id)),
+                )
+            else:  # nuevo: alert_count arranca en 1 si se aviso, 0 si solo se rastrea.
                 self.conn.execute(
                     "INSERT INTO tracked "
                     "(kind, item_id, ref, detalle, name, first_alert, last_alert, alert_count) "
-                    "VALUES (?,?,?,?,?,?,?,1)",
-                    (kind, str(item_id), ref, detalle, name, now, now),
+                    "VALUES (?,?,?,?,?,?,?,?)",
+                    (kind, str(item_id), ref, detalle, name, now, now, 1 if bump else 0),
                 )
             self.conn.commit()
 

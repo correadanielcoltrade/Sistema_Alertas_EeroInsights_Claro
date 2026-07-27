@@ -97,12 +97,22 @@ def _start_of_today_utc():
 
 def estado_text(store):
     outages = len(store.all_ids("outage"))
-    unhealthy = len(store.all_ids("unhealthy"))
-    return (
-        "📊 *Estado actual*\n\n"
-        f"🚨 Caidas activas: *{outages}*\n"
-        f"🔴🟠 Redes no saludables: *{unhealthy}*"
-    )
+    unhealthy = store.all_active("unhealthy")
+    criticas = [r for r in unhealthy if r["ref"] == "CRITICAL"]
+    no_criticas = [r for r in unhealthy if r["ref"] != "CRITICAL"]
+    partes = [
+        "📊 *Estado actual*\n",
+        f"🚨 Caidas activas: *{outages}*",
+        f"🔴 No saludables criticas: *{len(criticas)}*",
+        f"🟠 No saludables NO criticas: *{len(no_criticas)}*",
+    ]
+    # Las NO criticas no generan aviso; se listan aqui para tenerlas presentes.
+    if no_criticas:
+        partes.append("\n_No criticas (solo informativas):_")
+        for r in no_criticas:
+            name = r["name"] or f"Red {r['item_id']}"
+            partes.append(f"• {name} ({r['item_id']})")
+    return "\n".join(partes)
 
 
 def soluciones_text(store):

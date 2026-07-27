@@ -96,23 +96,34 @@ class UnhealthyEngine:
 
         for nid, net in activos.items():
             row = self.store.get(nid, kind=self.KIND)
-            es_nueva = row is None
-            if es_nueva:
-                self.collector.send_individual(self._params_individual(net))  # individual
-            elif self._should_renotify(row):
-                self.collector.add(self._conciso(net))                        # consolidado
-            else:
-                continue
+            critica = net.get("highest_severity") == "CRITICAL"
+            # 'notificada' = ya se envio al menos un aviso (alert_count > 0). Solo
+            # las criticas avisan; si una red escala de NO CRITICA a CRITICA recibe
+            # su alerta individual la primera vez que es critica (contador seguia en 0).
+            notificada = row is not None and row["alert_count"] > 0
+            bump = False
+            if critica:
+                if not notificada:
+                    self.collector.send_individual(self._params_individual(net))  # individual
+                    bump = True
+                elif self._should_renotify(row):
+                    self.collector.add(self._conciso(net))                        # consolidado
+                    bump = True
+            # Las NO CRITICAS (y las criticas entre re-notificaciones) se rastrean sin
+            # avisar: cuentan para /estado y /sin_solucionar pero no envian WhatsApp.
             if not dry:
                 self.store.upsert_alert(
                     nid, net.get("highest_severity"), kind=self.KIND,
-                    detalle=self._alerts_text(net.get("alerts")), name=self._net_name(nid),
+                    detalle=self._alerts_text(net.get("alerts")),
+                    name=self._net_name(nid), bump=bump,
                 )
 
         for nid in self.store.all_ids(kind=self.KIND) - set(activos.keys()):
             row = self.store.get(nid, kind=self.KIND)
             name = (row["name"] if row and row["name"] else self._net_name(nid))
-            self.collector.add(f"{name} ({nid}): Estado saludable")
+            # Solo se avisa la recuperacion si la red llego a notificarse (fue critica).
+            if row and row["alert_count"] > 0:
+                self.collector.add(f"{name} ({nid}): Estado saludable")
             if not dry:
                 self.store.record_resolution(
                     self.KIND, nid, name,
