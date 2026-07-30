@@ -15,6 +15,11 @@ services:
         value: /var/data/alertas.db
       - key: DRY_RUN
         value: "false"
+      # Redes de prueba a excluir del monitoreo (IDs separados por coma).
+      # Se administra desde el panel de Render (Environment): editar el valor y
+      # el servicio redespliega. Dejar sin valor = no excluir ninguna.
+      - key: EXCLUDED_NETWORK_IDS
+        sync: false
       # Los demas (EERO_ADMIN_TOKEN, WA_TOKEN, WA_PHONE_NUMBER_ID,
       # WA_TEMPLATE_NAME, WA_RECIPIENTS, WA_VERIFY_TOKEN, etc.) se cargan
       # como variables de entorno en el panel de Render (Environment).

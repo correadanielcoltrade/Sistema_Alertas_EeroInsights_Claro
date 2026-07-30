@@ -116,11 +116,13 @@ def build():
         eero, collector, store,
         insight_template=config.INSIGHT_URL_TEMPLATE,
         renotify_minutes=config.RENOTIFY_MINUTES,
+        excluded=config.EXCLUDED_NETWORK_IDS,
     )
     unhealthy = UnhealthyEngine(
         eero, collector, store,
         insight_template=config.INSIGHT_URL_TEMPLATE,
         renotify_minutes=config.RENOTIFY_MINUTES,
+        excluded=config.EXCLUDED_NETWORK_IDS,
     )
     return store, wa, collector, engine, unhealthy, subs
 
@@ -148,10 +150,12 @@ def main():
 
     activos = subs.count_active() if subs is not None else len(config.WA_RECIPIENTS)
     log.info(
-        "Iniciando WhatsApp. Poll cada %d min | re-notif %d min | budget %d | DRY_RUN=%s | receptores activos=%d",
+        "Iniciando WhatsApp. Poll cada %d min | re-notif %d min | budget %d | DRY_RUN=%s | receptores activos=%d | redes excluidas=%d",
         config.POLL_MINUTES, config.RENOTIFY_MINUTES, config.WA_BODY_BUDGET,
-        config.DRY_RUN, activos,
+        config.DRY_RUN, activos, len(config.EXCLUDED_NETWORK_IDS),
     )
+    if config.EXCLUDED_NETWORK_IDS:
+        log.info("Redes de prueba excluidas: %s", ", ".join(sorted(config.EXCLUDED_NETWORK_IDS)))
 
     sched = BackgroundScheduler(timezone="America/Bogota")
     sched.add_job(

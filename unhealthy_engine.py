@@ -42,12 +42,15 @@ def _con_etiqueta(nid, name):
 class UnhealthyEngine:
     KIND = "unhealthy"
 
-    def __init__(self, eero, collector, store, insight_template, renotify_minutes=10):
+    def __init__(self, eero, collector, store, insight_template, renotify_minutes=10,
+                 excluded=None):
         self.eero = eero
         self.collector = collector
         self.store = store
         self.insight_template = insight_template
         self.renotify_minutes = renotify_minutes
+        # IDs de red (texto) a ignorar por completo: redes de prueba.
+        self.excluded = set(excluded or ())
 
     def _net_name(self, network_id):
         return self.eero.network_info(network_id).get("name") or f"Red {network_id}"
@@ -92,6 +95,11 @@ class UnhealthyEngine:
             return
 
         activos = {str(n["network_id"]): n for n in nets if not n.get("is_deleted")}
+        if self.excluded:
+            antes = len(activos)
+            activos = {nid: n for nid, n in activos.items() if nid not in self.excluded}
+            if antes != len(activos):
+                log.info("No saludables: %d red(es) de prueba excluidas.", antes - len(activos))
         log.info("Redes no saludables: %d", len(activos))
 
         for nid, net in activos.items():
@@ -119,6 +127,11 @@ class UnhealthyEngine:
                 )
 
         for nid in self.store.all_ids(kind=self.KIND) - set(activos.keys()):
+            if nid in self.excluded:
+                # Red de prueba: se limpia del store sin avisar ni registrar resolucion.
+                if not dry:
+                    self.store.remove(nid, kind=self.KIND)
+                continue
             row = self.store.get(nid, kind=self.KIND)
             name = (row["name"] if row and row["name"] else self._net_name(nid))
             # Solo se avisa la recuperacion si la red llego a notificarse (fue critica).

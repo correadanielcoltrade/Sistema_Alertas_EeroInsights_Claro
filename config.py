@@ -32,6 +32,14 @@ EERO_ORG_ID = _get("EERO_ORG_ID", "self")
 POLL_MINUTES = int(_get("POLL_MINUTES", "10"))
 RENOTIFY_MINUTES = int(_get("RENOTIFY_MINUTES", "10"))
 
+# --- Redes excluidas (testing/prueba) ---
+# IDs de red a IGNORAR por completo (separados por coma). Sirve para las redes de
+# prueba de eero Insights que se caen a proposito y no deben alertar. Se ignoran en
+# caidas y en no saludables: no notifican, no cuentan en /estado y se limpian del
+# store en silencio (sin aviso de "recuperada"). Para volver a incluir una red,
+# quita su ID de aqui y redespliega. Los IDs se comparan como texto.
+EXCLUDED_NETWORK_IDS = set(_list("EXCLUDED_NETWORK_IDS"))
+
 # --- Link Insights ---
 INSIGHT_URL_TEMPLATE = _get(
     "INSIGHT_URL_TEMPLATE", "https://insight.eero.com/networks/{network_id}"
