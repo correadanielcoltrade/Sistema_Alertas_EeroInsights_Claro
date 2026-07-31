@@ -76,9 +76,13 @@ class UnhealthyEngine:
     def daily_report(self, send=True):
         """Genera el reporte diario y refresca el snapshot del store.
 
-        send=True: agrega las redes al collector (para enviar el consolidado).
-        send=False: solo refresca el snapshot del store (para /estado), sin enviar
-        (se usa al arrancar si el snapshot esta vacio).
+        send=True: agrega las redes con problema al collector (consolidado de
+        problemas) y DEVUELVE la lista de lineas de las redes RECUPERADAS desde el
+        ultimo reporte (para que el caller las envie como un mensaje de cierre
+        aparte). send=False: solo refresca el snapshot (para /estado), sin enviar
+        ni anunciar cierres (se usa al arrancar si el snapshot esta vacio).
+
+        Retorna: lista de lineas de recuperadas (vacia si no hay o si send=False).
         """
         log.info("Reporte diario de redes no saludables (send=%s)...", send)
         dry = getattr(self.collector, "dry_run", False)
@@ -86,7 +90,7 @@ class UnhealthyEngine:
             nets = self.eero.unhealthy_networks()
         except EeroAuthError:
             log.warning("Token fallo al consultar unhealthy (reporte diario).")
-            return
+            return []
 
         activos = {str(n["network_id"]): n for n in nets if not n.get("is_deleted")}
         if self.excluded:
@@ -112,16 +116,25 @@ class UnhealthyEngine:
                     name=self._net_name(nid), bump=False,
                 )
 
-        # Redes que ya no estan: se marcan resueltas y se quitan del snapshot.
+        # Redes que ya no estan = RECUPERADAS: se anuncian (mensaje de cierre
+        # aparte), se marcan resueltas y se quitan del snapshot.
+        recuperadas = []
         for nid in self.store.all_ids(kind=self.KIND) - set(activos.keys()):
+            if nid in self.excluded:
+                # Red de prueba: se limpia en silencio, sin anunciar ni registrar.
+                if not dry:
+                    self.store.remove(nid, kind=self.KIND)
+                continue
+            row = self.store.get(nid, kind=self.KIND)
+            name = (row["name"] if row and row["name"] else self._net_name(nid))
+            if send:
+                recuperadas.append(f"{_con_etiqueta(nid, name)} ({nid}): Estado recuperada")
             if not dry:
-                if nid not in self.excluded:
-                    row = self.store.get(nid, kind=self.KIND)
-                    name = (row["name"] if row and row["name"] else self._net_name(nid))
-                    self.store.record_resolution(
-                        self.KIND, nid, name,
-                        row["detalle"] if row else None,
-                        row["first_alert"] if row else None,
-                        row["alert_count"] if row else 0,
-                    )
+                self.store.record_resolution(
+                    self.KIND, nid, name,
+                    row["detalle"] if row else None,
+                    row["first_alert"] if row else None,
+                    row["alert_count"] if row else 0,
+                )
                 self.store.remove(nid, kind=self.KIND)
+        return recuperadas

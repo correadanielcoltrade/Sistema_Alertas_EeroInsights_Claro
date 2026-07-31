@@ -144,15 +144,27 @@ def poll_outages(collector, engine):
 
 
 def reporte_diario(collector_diario, unhealthy):
-    """Reporte DIARIO de redes no saludables: un consolidado en la manana."""
+    """Reporte DIARIO de redes no saludables en la manana.
+
+    Envia hasta dos consolidados: (1) las redes con problema y (2) un mensaje de
+    CIERRE aparte con las que se recuperaron desde el ultimo reporte.
+    """
     if not config.UNHEALTHY_ENABLED:
         return
     collector_diario.reset()
+    recuperadas = []
     try:
-        unhealthy.daily_report(send=True)
+        recuperadas = unhealthy.daily_report(send=True)
     except Exception:  # noqa: BLE001
         log.exception("Error en el reporte diario de no saludables (se continua).")
-    collector_diario.flush()
+    collector_diario.flush()  # mensaje 1: problemas actuales
+    # Mensaje 2 (aparte): cierre de las recuperadas.
+    if recuperadas:
+        log.info("Cierre no-saludables: %d red(es) recuperada(s).", len(recuperadas))
+        collector_diario.reset()
+        for linea in recuperadas:
+            collector_diario.add(linea)
+        collector_diario.flush()
 
 
 def main():
