@@ -15,6 +15,9 @@ services:
         value: /var/data/alertas.db
       - key: DRY_RUN
         value: "false"
+      # Hora local (Colombia) del reporte diario de redes no saludables.
+      - key: UNHEALTHY_REPORT_HOUR
+        value: "9"
       # Redes de prueba a excluir del monitoreo (IDs separados por coma).
       # Se administra desde el panel de Render (Environment): editar el valor y
       # el servicio redespliega. Dejar sin valor = no excluir ninguna.

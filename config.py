@@ -80,8 +80,17 @@ WA_VERIFY_TOKEN = _get("WA_VERIFY_TOKEN", "cambia_esta_palabra")
 WA_BATCH_MAX = int(_get("WA_BATCH_MAX", "10"))
 WA_BODY_BUDGET = int(_get("WA_BODY_BUDGET", "900"))
 
-# --- Monitoreo unhealthy en tiempo real ---
+# --- Reporte diario de redes no saludables ---
+# Las redes no saludables NO se notifican en tiempo real: son un reporte que solo
+# cambia una vez al dia. Se envia UN consolidado por WhatsApp en la manana y se
+# consultan con /estado el resto del dia. (Las CAIDAS si siguen en tiempo real.)
 UNHEALTHY_ENABLED = _get("UNHEALTHY_ENABLED", "true").lower() in ("1", "true", "yes", "si")
+# Hora local (America/Bogota) del envio del reporte diario.
+UNHEALTHY_REPORT_HOUR = int(_get("UNHEALTHY_REPORT_HOUR", "9"))
+# Si es true, el reporte matutino incluye SOLO las criticas (las no criticas
+# quedan solo en /estado). Por defecto false = incluye todas.
+UNHEALTHY_REPORT_CRITICAL_ONLY = _get(
+    "UNHEALTHY_REPORT_CRITICAL_ONLY", "false").lower() in ("1", "true", "yes", "si")
 
 # --- General ---
 DRY_RUN = _get("DRY_RUN", "true").lower() in ("1", "true", "yes", "si")

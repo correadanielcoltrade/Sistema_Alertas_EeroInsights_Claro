@@ -14,17 +14,17 @@ def _solo_digitos(s):
 
 def help_text():
     return (
-        "🤖 *Sistema de Alertas eero (WhatsApp)*\n\n"
-        "Monitoreo la red cada 10 min y aviso las novedades.\n\n"
-        "*Recibir alertas:*\n"
-        "/suscribir - dar de alta este numero ➕\n"
-        "/baja - dar de baja este numero ➖\n"
-        "_Tambien: /suscribir 573001112233 para otro numero._\n\n"
-        "*Consultas:*\n"
-        "/estado - resumen de novedades activas\n"
-        "/soluciones - redes solucionadas hoy\n"
-        "/sin_solucionar - redes pendientes (tiempo y avisos)\n"
-        "/help - muestra este menu"
+        "🤖 *Sistema de Alertas eero (WhatsApp)*\n"
+        "Monitoreo la red y aviso las novedades.\n\n"
+        "*Responde con el numero de una opcion:*\n\n"
+        "1️⃣  📊 Estado actual (caidas + no saludables)\n"
+        "2️⃣  ✅ Soluciones del dia\n"
+        "3️⃣  ⏳ Redes sin solucionar (pendientes)\n"
+        "4️⃣  ➕ Suscribir este numero a las alertas\n"
+        "5️⃣  ➖ Dar de baja este numero\n"
+        "6️⃣  ❓ Ver este menu\n\n"
+        "_Para otro numero: escribe 4 573001112233 (suscribir) "
+        "o 5 573001112233 (baja)._"
     )
 
 
@@ -51,13 +51,13 @@ def alta_text(subs, numero, sender):
     quien = _quien(numero, sender)
     if estado == "nuevo":
         return (f"✅ *Suscrito:* {quien} recibira las alertas de eero.\n"
-                "Escribe */baja* para darlo de baja.")
+                "Escribe *5* para darlo de baja.")
     if estado == "reactivado":
         return (f"✅ *Reactivado:* {quien} vuelve a recibir alertas.\n"
-                "Escribe */baja* para darlo de baja.")
+                "Escribe *5* para darlo de baja.")
     if estado == "ya_activo":
         return (f"ℹ️ {quien.capitalize()} *ya estaba suscrito*.\n"
-                "Escribe */baja* para dejar de recibir alertas.")
+                "Escribe *5* para dejar de recibir alertas.")
     return _DB_ERROR
 
 
@@ -68,10 +68,10 @@ def baja_text(subs, numero, sender):
     quien = _quien(numero, sender)
     if estado == "dado_de_baja":
         return (f"✅ *Baja realizada:* {quien} ya no recibira alertas.\n"
-                "Escribe */suscribir* para volver a activarlas.")
+                "Escribe *4* para volver a activarlas.")
     if estado == "no_estaba":
         return (f"ℹ️ {quien.capitalize()} *no estaba suscrito*.\n"
-                "Escribe */suscribir* para recibir alertas.")
+                "Escribe *4* para recibir alertas.")
     return _DB_ERROR
 
 
@@ -96,22 +96,32 @@ def _start_of_today_utc():
 
 
 def estado_text(store):
+    """Consolidado del estado: caidas (tiempo real) + reporte diario de no saludables."""
     outages = len(store.all_ids("outage"))
     unhealthy = store.all_active("unhealthy")
     criticas = [r for r in unhealthy if r["ref"] == "CRITICAL"]
     no_criticas = [r for r in unhealthy if r["ref"] != "CRITICAL"]
+
     partes = [
         "📊 *Estado actual*\n",
-        f"🚨 Caidas activas: *{outages}*",
-        f"🔴 No saludables criticas: *{len(criticas)}*",
-        f"🟠 No saludables NO criticas: *{len(no_criticas)}*",
+        f"🚨 Caidas activas (tiempo real): *{outages}*  ·  escribe *3* para el detalle",
+        "",
+        f"🩺 *Redes no saludables (reporte del dia): {len(unhealthy)}*",
     ]
-    # Las NO criticas no generan aviso; se listan aqui para tenerlas presentes.
-    if no_criticas:
-        partes.append("\n_No criticas (solo informativas):_")
-        for r in no_criticas:
+
+    def _listar(rows):
+        for r in rows:
             name = r["name"] or f"Red {r['item_id']}"
             partes.append(f"• {name} ({r['item_id']})")
+
+    if criticas:
+        partes.append(f"\n🔴 Criticas ({len(criticas)}):")
+        _listar(criticas)
+    if no_criticas:
+        partes.append(f"\n🟠 No criticas ({len(no_criticas)}):")
+        _listar(no_criticas)
+    if not unhealthy:
+        partes.append("_Sin redes no saludables en el reporte de hoy._ 🎉")
     return "\n".join(partes)
 
 
@@ -152,28 +162,35 @@ def sin_solucionar_text(store):
 def dispatch(text, store, subs=None, sender=None):
     """Devuelve el texto de respuesta para un mensaje entrante.
 
-    'subs' es el SubscriberStore (o None) y 'sender' el numero que escribio,
-    para las altas/bajas.
+    Menu por NUMEROS (1..6). Se mantienen los /comandos y palabras como alias
+    ocultos por compatibilidad. 'subs' es el SubscriberStore (o None) y 'sender'
+    el numero que escribio, para las altas/bajas.
     """
     raw = (text or "").strip()
     partes = raw.split()
-    # Primera palabra, sin '/' y en minuscula (acepta "SUSCRIBIR" o "/suscribir").
-    palabra = partes[0].lstrip("/").lower() if partes else ""
-    # Numero opcional como argumento: "/suscribir 573186388932" (para el soporte).
-    # Si no se pasa, se usa el numero de quien escribe.
+    if not partes:
+        return help_text()
+
+    # Primer token normalizado: sin '/', en minuscula. Si empieza por digitos se
+    # toma la opcion numerica (tolera "1", "1.", "1)", "1️⃣").
+    tok = partes[0].lstrip("/").lower()
+    mdig = re.match(r"\d+", tok)
+    opcion = mdig.group(0) if mdig else tok
+
+    # Argumento opcional: numero de telefono destino (para suscribir/dar de baja
+    # a OTRO numero, p. ej. "4 573001112233"). Si no se pasa, es quien escribe.
     arg = _solo_digitos(partes[1]) if len(partes) > 1 else ""
     objetivo = arg or sender
-    if palabra in ALTA:
-        return alta_text(subs, objetivo, sender)
-    if palabra in BAJA:
-        return baja_text(subs, objetivo, sender)
-    if not raw.startswith("/"):
-        return help_text()
-    cmd = raw.split()[0][1:].lower()
-    if cmd == "estado":
+
+    if opcion in ("1", "estado"):
         return estado_text(store)
-    if cmd in ("soluciones", "solucionadas"):
+    if opcion in ("2", "soluciones", "solucionadas"):
         return soluciones_text(store)
-    if cmd in ("sin_solucionar", "pendientes"):
+    if opcion in ("3", "sin_solucionar", "pendientes"):
         return sin_solucionar_text(store)
+    if opcion == "4" or opcion in ALTA:
+        return alta_text(subs, objetivo, sender)
+    if opcion == "5" or opcion in BAJA:
+        return baja_text(subs, objetivo, sender)
+    # 6, help, ayuda, menu o cualquier otra cosa -> muestra el menu.
     return help_text()

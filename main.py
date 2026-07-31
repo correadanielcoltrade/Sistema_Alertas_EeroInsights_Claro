@@ -105,13 +105,19 @@ def build():
                 return activos
         return config.WA_RECIPIENTS
 
-    collector = Collector(
-        wa, destinatarios,
-        config.WA_TEMPLATE_INDIVIDUAL, config.WA_TEMPLATE_INDIVIDUAL_LANG,
-        config.WA_TEMPLATE_CONSOL, config.WA_TEMPLATE_CONSOL_LANG,
-        budget=config.WA_BODY_BUDGET, max_count=config.WA_BATCH_MAX,
-        dry_run=config.DRY_RUN,
-    )
+    def _mk_collector():
+        return Collector(
+            wa, destinatarios,
+            config.WA_TEMPLATE_INDIVIDUAL, config.WA_TEMPLATE_INDIVIDUAL_LANG,
+            config.WA_TEMPLATE_CONSOL, config.WA_TEMPLATE_CONSOL_LANG,
+            budget=config.WA_BODY_BUDGET, max_count=config.WA_BATCH_MAX,
+            dry_run=config.DRY_RUN,
+        )
+
+    # Collectors separados: las caidas (interval) y el reporte diario (cron) corren
+    # en hilos distintos del scheduler; no deben compartir estado mutable.
+    collector = _mk_collector()          # caidas (tiempo real)
+    collector_diario = _mk_collector()   # reporte diario de no saludables
     engine = AlertEngine(
         eero, collector, store,
         insight_template=config.INSIGHT_URL_TEMPLATE,
@@ -119,52 +125,80 @@ def build():
         excluded=config.EXCLUDED_NETWORK_IDS,
     )
     unhealthy = UnhealthyEngine(
-        eero, collector, store,
+        eero, collector_diario, store,
         insight_template=config.INSIGHT_URL_TEMPLATE,
-        renotify_minutes=config.RENOTIFY_MINUTES,
         excluded=config.EXCLUDED_NETWORK_IDS,
+        critical_only=config.UNHEALTHY_REPORT_CRITICAL_ONLY,
     )
-    return store, wa, collector, engine, unhealthy, subs
+    return store, wa, collector, collector_diario, engine, unhealthy, subs
 
 
-def poll_cycle(collector, engine, unhealthy):
+def poll_outages(collector, engine):
+    """Ciclo de CAIDAS (tiempo real): notifica nuevas y re-notifica activas."""
     collector.reset()
     try:
         engine.poll_once()
     except Exception:  # noqa: BLE001
         log.exception("Error en el ciclo de caidas (se continua).")
-    if config.UNHEALTHY_ENABLED:
-        try:
-            unhealthy.poll_once()
-        except Exception:  # noqa: BLE001
-            log.exception("Error en el ciclo de unhealthy (se continua).")
-    collector.flush()  # envia el consolidado (las nuevas ya salieron aparte)
+    collector.flush()
+
+
+def reporte_diario(collector_diario, unhealthy):
+    """Reporte DIARIO de redes no saludables: un consolidado en la manana."""
+    if not config.UNHEALTHY_ENABLED:
+        return
+    collector_diario.reset()
+    try:
+        unhealthy.daily_report(send=True)
+    except Exception:  # noqa: BLE001
+        log.exception("Error en el reporte diario de no saludables (se continua).")
+    collector_diario.flush()
 
 
 def main():
-    store, wa, collector, engine, unhealthy, subs = build()
+    store, wa, collector, collector_diario, engine, unhealthy, subs = build()
 
-    if len(sys.argv) > 1 and sys.argv[1] == "once":
-        poll_cycle(collector, engine, unhealthy)
-        return
+    if len(sys.argv) > 1:
+        modo = sys.argv[1]
+        if modo == "once":                          # solo caidas (prueba)
+            poll_outages(collector, engine)
+            return
+        if modo in ("reporte", "diario", "unhealthy"):  # solo reporte diario (prueba)
+            reporte_diario(collector_diario, unhealthy)
+            return
 
     activos = subs.count_active() if subs is not None else len(config.WA_RECIPIENTS)
     log.info(
-        "Iniciando WhatsApp. Poll cada %d min | re-notif %d min | budget %d | DRY_RUN=%s | receptores activos=%d | redes excluidas=%d",
-        config.POLL_MINUTES, config.RENOTIFY_MINUTES, config.WA_BODY_BUDGET,
+        "Iniciando WhatsApp. Caidas cada %d min | re-notif %d min | reporte no-saludables %02d:00 COT | DRY_RUN=%s | receptores=%d | excluidas=%d",
+        config.POLL_MINUTES, config.RENOTIFY_MINUTES, config.UNHEALTHY_REPORT_HOUR,
         config.DRY_RUN, activos, len(config.EXCLUDED_NETWORK_IDS),
     )
     if config.EXCLUDED_NETWORK_IDS:
         log.info("Redes de prueba excluidas: %s", ", ".join(sorted(config.EXCLUDED_NETWORK_IDS)))
 
+    # Al arrancar, si el snapshot de no saludables esta vacio (primer despliegue),
+    # se refresca en silencio para que /estado no salga vacio antes del reporte.
+    if config.UNHEALTHY_ENABLED and not store.all_ids("unhealthy"):
+        log.info("Snapshot de no saludables vacio: refrescando en silencio para /estado.")
+        try:
+            unhealthy.daily_report(send=False)
+        except Exception:  # noqa: BLE001
+            log.exception("Error refrescando snapshot inicial de no saludables.")
+
     sched = BackgroundScheduler(timezone="America/Bogota")
     sched.add_job(
-        poll_cycle, "interval", minutes=config.POLL_MINUTES,
-        args=[collector, engine, unhealthy],
+        poll_outages, "interval", minutes=config.POLL_MINUTES,
+        args=[collector, engine],
         misfire_grace_time=300, coalesce=True,
     )
+    if config.UNHEALTHY_ENABLED:
+        sched.add_job(
+            reporte_diario, "cron", hour=config.UNHEALTHY_REPORT_HOUR, minute=0,
+            args=[collector_diario, unhealthy],
+            misfire_grace_time=3600, coalesce=True,
+        )
     sched.start()
-    poll_cycle(collector, engine, unhealthy)  # corrida inmediata
+    poll_outages(collector, engine)  # corrida inmediata de caidas
 
     # Servidor webhook (bloquea). Render enruta el trafico al PORT.
     app = create_app(store, wa, subs)
