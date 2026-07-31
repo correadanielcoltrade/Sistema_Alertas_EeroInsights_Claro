@@ -5,7 +5,29 @@ Formato WhatsApp: *negrita*  _cursiva_ . Un solo mensaje consolidado por comando
 import re
 from datetime import datetime, timezone, timedelta
 
+import config
+import network_labels
+
 COT = timezone(timedelta(hours=-5))
+
+# WhatsApp corta el texto ~4096 caracteres; dejamos margen en /estado.
+BUDGET_ESTADO = 3800
+
+
+def _bloque_incidencia(nid, name, criticidad):
+    """Bloque de detalle de una incidencia para /estado: cliente, IDs (cuenta
+    Claro cuando exista + ID de eero), criticidad y enlace directo a Insight."""
+    nid = str(nid)
+    label, nick = network_labels.get(nid)
+    cliente = name or f"Red {nid}"
+    if nick:
+        cliente = f"{cliente} ({nick})"
+    ids = f"Cuenta Claro: {label} · ID eero: {nid}" if label else f"ID eero: {nid}"
+    url = config.INSIGHT_URL_TEMPLATE.format(network_id=nid)
+    return (f"• *{cliente}*\n"
+            f"  {ids}\n"
+            f"  Criticidad: {criticidad}\n"
+            f"  🔗 {url}")
 
 
 def _solo_digitos(s):
@@ -96,32 +118,41 @@ def _start_of_today_utc():
 
 
 def estado_text(store):
-    """Consolidado del estado: caidas (tiempo real) + reporte diario de no saludables."""
-    outages = len(store.all_ids("outage"))
+    """Resumen de alertas: caidas (tiempo real) + no saludables (reporte del dia).
+    Cada incidencia con cliente, cuenta Claro + ID de eero, criticidad y enlace."""
+    caidas = store.all_active("outage")
     unhealthy = store.all_active("unhealthy")
     criticas = [r for r in unhealthy if r["ref"] == "CRITICAL"]
     no_criticas = [r for r in unhealthy if r["ref"] != "CRITICAL"]
 
     partes = [
         "📊 *Estado actual*\n",
-        f"🚨 Caidas activas (tiempo real): *{outages}*  ·  escribe *3* para el detalle",
-        "",
-        f"🩺 *Redes no saludables (reporte del dia): {len(unhealthy)}*",
+        f"🚨 *Caidas activas (tiempo real): {len(caidas)}*",
+        f"🩺 *No saludables (reporte del dia): {len(unhealthy)}*",
     ]
+    if not caidas and not unhealthy:
+        partes.append("\n_Sin novedades activas._ 🎉")
+        return "\n".join(partes)
 
-    def _listar(rows):
+    # Secciones en orden; cada bloque se agrega mientras quepa en el presupuesto.
+    secciones = [
+        ("\n🚨 *Caidas:*", caidas, "🚨 Caida"),
+        (f"\n🔴 *No saludables criticas ({len(criticas)}):*", criticas, "🔴 Critica"),
+        (f"\n🟠 *No saludables NO criticas ({len(no_criticas)}):*", no_criticas, "🟠 No critica"),
+    ]
+    omitidas = 0
+    for titulo, rows, criticidad in secciones:
+        if not rows:
+            continue
+        partes.append(titulo)
         for r in rows:
-            name = r["name"] or f"Red {r['item_id']}"
-            partes.append(f"• {name} ({r['item_id']})")
-
-    if criticas:
-        partes.append(f"\n🔴 Criticas ({len(criticas)}):")
-        _listar(criticas)
-    if no_criticas:
-        partes.append(f"\n🟠 No criticas ({len(no_criticas)}):")
-        _listar(no_criticas)
-    if not unhealthy:
-        partes.append("_Sin redes no saludables en el reporte de hoy._ 🎉")
+            bloque = _bloque_incidencia(r["item_id"], r["name"], criticidad)
+            if sum(len(p) for p in partes) + len(bloque) + 1 > BUDGET_ESTADO:
+                omitidas += 1
+                continue
+            partes.append(bloque)
+    if omitidas:
+        partes.append(f"\n_… y {omitidas} incidencia(s) mas. Usa la opcion 3 para verlas._")
     return "\n".join(partes)
 
 
