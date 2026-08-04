@@ -38,7 +38,7 @@ MAX_SLOT_LEN = 90
 class Collector:
     def __init__(self, wa, recipients,
                  tpl_indiv, lang_indiv, tpl_consol, lang_consol,
-                 budget=900, max_count=10, dry_run=False):
+                 budget=900, max_count=10, dry_run=False, push_enabled=True):
         self.wa = wa
         # 'recipients' puede ser una lista fija o un callable que la devuelve
         # (para leer los suscriptores activos en cada envio, sin re-desplegar).
@@ -51,6 +51,10 @@ class Collector:
         # Numero de variables de la plantilla consolidada (una red por variable).
         self.slots = max_count
         self.dry_run = dry_run
+        # push_enabled=False: NO se envia ninguna plantilla proactiva (evita el
+        # cobro de Meta). El estado igual se actualiza (eso lo hacen los motores);
+        # el equipo consulta por el menu. dry_run es distinto: es modo prueba.
+        self.push_enabled = push_enabled
         self.lines = []
 
     def _dests(self):
@@ -60,6 +64,8 @@ class Collector:
 
     # ---- individuales (alertas nuevas, plantilla de 8 variables) ----
     def send_individual(self, params):
+        if not self.push_enabled:
+            return  # envio automatico apagado (sin presupuesto)
         for to in self._dests():
             self.wa.send_template(to, self.tpl_indiv, self.lang_indiv, params)
 
@@ -93,6 +99,9 @@ class Collector:
         return [[self._limpiar(l, n) for n, l in enumerate(g, 1)] for g in grupos]
 
     def flush(self):
+        if not self.push_enabled:
+            self.reset()  # envio automatico apagado: se descarta lo acumulado
+            return
         if not self.lines:
             return
         grupos = self._empaquetar()

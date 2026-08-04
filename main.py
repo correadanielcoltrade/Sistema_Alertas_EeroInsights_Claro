@@ -111,7 +111,7 @@ def build():
             config.WA_TEMPLATE_INDIVIDUAL, config.WA_TEMPLATE_INDIVIDUAL_LANG,
             config.WA_TEMPLATE_CONSOL, config.WA_TEMPLATE_CONSOL_LANG,
             budget=config.WA_BODY_BUDGET, max_count=config.WA_BATCH_MAX,
-            dry_run=config.DRY_RUN,
+            dry_run=config.DRY_RUN, push_enabled=config.ALERTAS_PUSH_ENABLED,
         )
 
     # Collectors separados: las caidas (interval) y el reporte diario (cron) corren
@@ -185,6 +185,11 @@ def main():
         config.POLL_MINUTES, config.RENOTIFY_MINUTES, config.UNHEALTHY_REPORT_HOUR,
         config.DRY_RUN, activos, len(config.EXCLUDED_NETWORK_IDS),
     )
+    if config.ALERTAS_PUSH_ENABLED:
+        log.info("ENVIO AUTOMATICO ACTIVADO: el bot envia alertas/renotif/reporte por Meta (se factura).")
+    else:
+        log.warning("ENVIO AUTOMATICO DESACTIVADO (ALERTAS_PUSH_ENABLED=false): modo CONSULTA. "
+                    "El bot NO envia nada solo; el equipo consulta por el menu (opciones 1 y 2).")
     if config.EXCLUDED_NETWORK_IDS:
         log.info("Redes de prueba excluidas: %s", ", ".join(sorted(config.EXCLUDED_NETWORK_IDS)))
 

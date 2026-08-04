@@ -80,6 +80,15 @@ WA_VERIFY_TOKEN = _get("WA_VERIFY_TOKEN", "cambia_esta_palabra")
 WA_BATCH_MAX = int(_get("WA_BATCH_MAX", "10"))
 WA_BODY_BUDGET = int(_get("WA_BODY_BUDGET", "900"))
 
+# --- Envio automatico (proactivo) a Meta ---
+# Meta COBRA por los mensajes proactivos (plantillas: alertas, re-notificaciones,
+# reporte diario, cierres). Cuando alguien le ESCRIBE al bot se abre una ventana
+# de 24h de respuesta gratis (texto libre). Sin presupuesto aprobado, esto va en
+# FALSE: el sistema sigue sondeando y actualizando su estado, pero NO envia nada
+# solo; el equipo consulta las alertas por el menu (opciones 1 y 2). Para reactivar
+# el envio automatico cuando haya presupuesto: ALERTAS_PUSH_ENABLED=true.
+ALERTAS_PUSH_ENABLED = _get("ALERTAS_PUSH_ENABLED", "false").lower() in ("1", "true", "yes", "si")
+
 # --- Reporte diario de redes no saludables ---
 # Las redes no saludables NO se notifican en tiempo real: son un reporte que solo
 # cambia una vez al dia. Se envia UN consolidado por WhatsApp en la manana y se

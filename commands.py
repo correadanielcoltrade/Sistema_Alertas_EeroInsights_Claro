@@ -37,12 +37,12 @@ def _solo_digitos(s):
 def help_text():
     return (
         "🤖 *Sistema de Alertas eero (WhatsApp)*\n"
-        "Monitoreo la red y aviso las novedades.\n\n"
+        "_Las alertas se consultan por aqui (opciones 1 y 2)._\n\n"
         "*Responde con el numero de una opcion:*\n\n"
-        "1️⃣  📊 Estado actual (caidas + no saludables)\n"
-        "2️⃣  ✅ Soluciones del dia\n"
-        "3️⃣  ⏳ Redes sin solucionar (pendientes)\n"
-        "4️⃣  ➕ Suscribir este numero a las alertas\n"
+        "1️⃣  🚨 Alertas (incidencias activas ahora)\n"
+        "2️⃣  🔁 Renotificaciones (pendientes: tiempo y avisos)\n"
+        "3️⃣  ✅ Soluciones del dia\n"
+        "4️⃣  ➕ Suscribir este numero\n"
         "5️⃣  ➖ Dar de baja este numero\n"
         "6️⃣  ❓ Ver este menu\n\n"
         "_Para otro numero: escribe 4 573001112233 (suscribir) "
@@ -126,7 +126,7 @@ def estado_text(store):
     no_criticas = [r for r in unhealthy if r["ref"] != "CRITICAL"]
 
     partes = [
-        "📊 *Estado actual*\n",
+        "🚨 *Alertas — incidencias activas*\n",
         f"🚨 *Caidas activas (tiempo real): {len(caidas)}*",
         f"🩺 *No saludables (reporte del dia): {len(unhealthy)}*",
     ]
@@ -176,9 +176,9 @@ def soluciones_text(store):
 def sin_solucionar_text(store):
     rows = store.all_active()
     if not rows:
-        return "⏳ *Redes sin solucionar*\n\nNo hay redes pendientes. 🎉"
+        return "🔁 *Renotificaciones (pendientes)*\n\nNo hay incidencias pendientes. 🎉"
     now = datetime.now(timezone.utc).isoformat()
-    partes = [f"⏳ *Redes sin solucionar* ({len(rows)})\n"]
+    partes = [f"🔁 *Renotificaciones — pendientes* ({len(rows)})\n"]
     for r in rows:
         name = r["name"] or f"Red {r['item_id']}"
         tipo = "Caida" if r["kind"] == "outage" else "No saludable"
@@ -213,12 +213,13 @@ def dispatch(text, store, subs=None, sender=None):
     arg = _solo_digitos(partes[1]) if len(partes) > 1 else ""
     objetivo = arg or sender
 
-    if opcion in ("1", "estado"):
-        return estado_text(store)
-    if opcion in ("2", "soluciones", "solucionadas"):
+    if opcion in ("1", "alertas", "alerta", "estado"):
+        return estado_text(store)          # Alertas = incidencias activas
+    if opcion in ("2", "renotificaciones", "renotificacion", "renotif",
+                  "sin_solucionar", "pendientes"):
+        return sin_solucionar_text(store)  # Renotificaciones = pendientes (tiempo/avisos)
+    if opcion in ("3", "soluciones", "solucionadas"):
         return soluciones_text(store)
-    if opcion in ("3", "sin_solucionar", "pendientes"):
-        return sin_solucionar_text(store)
     if opcion == "4" or opcion in ALTA:
         return alta_text(subs, objetivo, sender)
     if opcion == "5" or opcion in BAJA:
